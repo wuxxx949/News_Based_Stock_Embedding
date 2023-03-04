@@ -99,7 +99,16 @@ class ModelDataPrep:
         self.training_start_date = training_start_date
         self.validation_start_date = validation_start_date
         self.validation_end_date = validation_end_date
+        self.target = pd.DataFrame()
+        self.bert_embedding = pd.DataFrame()
         self._load_bert_embeddings()
+        self._load_target()
+
+    def _load_target(self):
+        target = pd.read_parquet(
+            os.path.join(self.save_dir_path, 'target_df.parquet.gzip')
+            )
+        self.target = target.set_index('date')
 
 
     def _load_bert_embeddings(self):
@@ -224,7 +233,7 @@ class ModelDataPrep:
         return self.bert_embedding[start_date: end_date]
 
     @property
-    def training_bert_df(self):
+    def training_bert_df(self) -> pd.DataFrame:
         end_date = self.validation_start_date - dt.timedelta(1)
         out = self._get_bert_vector(
             start_date=self.training_start_date,
@@ -234,7 +243,7 @@ class ModelDataPrep:
         return out
 
     @property
-    def validation_bert_df(self):
+    def validation_bert_df(self) -> pd.DataFrame:
         end_date = self.validation_end_date - dt.timedelta(1)
         out = self._get_bert_vector(
             start_date=self.validation_start_date,
@@ -243,14 +252,40 @@ class ModelDataPrep:
 
         return out
 
-    def prep_model_data(self) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    def _get_target(self, start_date: datetime, end_date: datetime) -> pd.DataFrame:
+        start_date = str(start_date.date())
+        end_date = str(end_date.date())
+
+        return self.target[start_date: end_date]
+
+    @property
+    def training_target(self) -> pd.DataFrame:
+        end_date = self.validation_start_date - dt.timedelta(1)
+        out = self._get_target(
+            start_date=self.training_start_date,
+            end_date=end_date
+            )
+
+        return out
+
+    @property
+    def validation_target(self) -> pd.DataFrame:
+        end_date = self.validation_end_date - dt.timedelta(1)
+        out = self._get_target(
+            start_date=self.validation_start_date,
+            end_date=end_date
+            )
+
+        return out
+
+    def prep_raw_model_data(self) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         training_df = self.training_bert_df \
             .merge(self.training_tfidf_df, on='news_id', how='inner')
 
         validation_df = self.validation_bert_df \
             .merge(self.validation_tfidf_df, on='news_id', how='inner')
 
-        return training_df, validation_df
+        return training_df, self.training_target, validation_df, self.validation_target
 
 
 if __name__ == '__main__':
@@ -265,16 +300,4 @@ if __name__ == '__main__':
         validation_end_date=v_end_date
     )
 
-    train_df, valid_df = mdp.prep_model_data()
-
-    train_tfidf_embedding = mdp.training_tfidf_df
-    train_bert_embedding = mdp.training_bert_df
-
-
-    bert_embedding = pd.read_parquet(
-        '/home/timnaka123/Documents/stock_embedding_nlp/src/data/pca_embedding_df.parquet.gzip'
-        )
-    bert_embedding = bert_embedding.reset_index(level=1, drop=False)
-
-    # datetime index are inclusive on both ends
-    sub_bert = bert_embedding[str(t_start_date.date()): str(v_start_date.date())]
+    train_df, train_target, valid_df, valid_target = mdp.prep_raw_model_data()
