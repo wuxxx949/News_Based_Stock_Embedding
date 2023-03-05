@@ -1,16 +1,18 @@
 import datetime as dt
 import os
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
+import tensorflow as tf
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 from src.data.bert_embedding import embedding_batch_preprocessing
 from src.data.explore import get_path
 from src.data.tfidf_embedding import tfidf_weighted_embedding
 from src.data.utils import STOPWORDS
+from src.model.utils import extract_date, lazyproperty, to_date
 
 
 class DateManager:
@@ -61,20 +63,6 @@ class DateManager:
         validation_end = min(validation_end, self.max_date)
 
         return self.min_date, validation_start, validation_end
-
-
-def extract_date(fpath: str) -> str:
-    # TODO: make it OS agnostic
-    # https://stackoverflow.com/questions/4579908/cross-platform-splitting-of-path-in-python
-    d = fpath.split('/')
-    date = [e for e in d if all([ee.isnumeric() for ee in e]) and len(e) > 0]
-    if len(date) == 0:
-        raise ValueError('no date in the path')
-
-    if len(date) > 1:
-        raise ValueError('multiple candidates for date in a path')
-
-    return date[0]
 
 
 class ModelDataPrep:
@@ -202,7 +190,7 @@ class ModelDataPrep:
 
         return self._tfidf_to_df(out)
 
-    @property
+    @lazyproperty
     def training_tfidf_df(self) -> pd.DataFrame:
         """tfidf based on training peroid data
         """
@@ -213,7 +201,7 @@ class ModelDataPrep:
 
         return embedding
 
-    @property
+    @lazyproperty
     def validation_tfidf_df(self) -> pd.DataFrame:
         """tfidf embedding based on both training and validation peroid data
         """
@@ -232,7 +220,7 @@ class ModelDataPrep:
 
         return self.bert_embedding[start_date: end_date]
 
-    @property
+    @lazyproperty
     def training_bert_df(self) -> pd.DataFrame:
         end_date = self.validation_start_date - dt.timedelta(1)
         out = self._get_bert_vector(
@@ -242,7 +230,7 @@ class ModelDataPrep:
 
         return out
 
-    @property
+    @lazyproperty
     def validation_bert_df(self) -> pd.DataFrame:
         end_date = self.validation_end_date - dt.timedelta(1)
         out = self._get_bert_vector(
@@ -258,7 +246,7 @@ class ModelDataPrep:
 
         return self.target[start_date: end_date]
 
-    @property
+    @lazyproperty
     def training_target(self) -> pd.DataFrame:
         end_date = self.validation_start_date - dt.timedelta(1)
         out = self._get_target(
@@ -268,7 +256,7 @@ class ModelDataPrep:
 
         return out
 
-    @property
+    @lazyproperty
     def validation_target(self) -> pd.DataFrame:
         end_date = self.validation_end_date - dt.timedelta(1)
         out = self._get_target(
@@ -279,13 +267,78 @@ class ModelDataPrep:
         return out
 
     def prep_raw_model_data(self) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-        training_df = self.training_bert_df \
-            .merge(self.training_tfidf_df, on='news_id', how='inner')
+        training_df = self.training_bert_df.reset_index() \
+            .merge(self.training_tfidf_df, on='news_id', how='inner') \
+            .sort_values('date') \
+            .set_index('date')
 
-        validation_df = self.validation_bert_df \
-            .merge(self.validation_tfidf_df, on='news_id', how='inner')
+        validation_df = self.validation_bert_df.reset_index() \
+            .merge(self.validation_tfidf_df, on='news_id', how='inner') \
+            .sort_values('date') \
+            .set_index('date')
 
         return training_df, self.training_target, validation_df, self.validation_target
+
+    @lazyproperty
+    def training_trading_date(self) -> List[datetime]:
+        return list(set(to_date(self.training_target.index)))
+
+    @lazyproperty
+    def validation_trading_date(self) -> List[datetime]:
+        return list(set(to_date(self.validation_target.index)))
+
+    @lazyproperty
+    def training_news_date(self) -> List[datetime]:
+        return list(set(to_date(self.training_bert_df.index)))
+
+    @lazyproperty
+    def validation_news_date(self) -> List[datetime]:
+        return list(set(to_date(self.validation_bert_df.index)))
+
+    @staticmethod
+    def _fetch_embeddings(
+        trading_dates: Iterable[datetime],
+        news_dates: Iterable[datetime],
+        embedding_df: pd.DataFrame,
+        days_lookback: int = 5
+        ) -> Dict[str, List[np.array]]:
+        """prepare embedding vectors within the range of days for given trading date
+
+        Args:
+            trading_dates (Iterable[datetime]): a set of trading dates
+            news_dates (Iterable[datetime]): a set of news dates
+            embedding_df (pd.DataFrame): bert and tfidf embedding dataframe
+            days_lookback (int, optional): number of days to look back for news. Defaults to 5.
+
+        Returns:
+            Dict[str, np.array]: trading date str as key and embedding arrays as value
+        """
+        out = {}
+        for td in trading_dates:
+            nd = [e for e in news_dates if 0 <= (e - td).days <= (days_lookback - 1)]
+            if len(nd) != 5:
+                continue
+            # fetch newes
+            min_date = str(min(nd))
+            max_date = str(max(nd))
+            tmp_df = embedding_df[min_date: max_date]
+            bert_embedding = tmp_df.filter(regex='^c', axis=1).groupby('date')
+            tfidf_embedding = tmp_df.filter(regex='^f', axis=1).groupby('date')
+            tmp_bert = []
+            bert_max_news = max([len(e) for e in dict(list(bert_embedding)).values()])
+            for _, d in bert_embedding:
+                # need to pad to the longest number of news in the neighboring days
+                d = d.reset_index(drop=True).reindex(range(bert_max_news ), fill_value=0)
+                tmp_bert.append(d.to_numpy().tolist())
+            tmp_tfidf = []
+            for _, d in tfidf_embedding:
+                d = d.reset_index(drop=True).reindex(range(bert_max_news ), fill_value=0)
+                tmp_tfidf.append(d.to_numpy().tolist())
+
+            out[str(td)] = [np.array(tmp_bert), np.array(tmp_tfidf)]
+
+        return out
+
 
 
 if __name__ == '__main__':
@@ -301,3 +354,30 @@ if __name__ == '__main__':
     )
 
     train_df, train_target, valid_df, valid_target = mdp.prep_raw_model_data()
+
+    out = {}
+    for td in mdp.training_trading_date:
+        nd = [e for e in mdp.training_news_date if 0 <= (e - td).days <= 4]
+        if len(nd) != 5:
+            continue
+        # fetch newes
+        min_date = str(min(nd))
+        max_date = str(max(nd))
+        tmp_df = train_df[min_date: max_date]
+        bert_embedding = tmp_df.filter(regex='^c', axis=1).groupby('date')
+        tfidf_embedding = tmp_df.filter(regex='^f', axis=1).groupby('date')
+        tmp_bert = []
+        bert_max_news = max([len(e) for e in dict(list(bert_embedding)).values()])
+        for _, d in bert_embedding:
+            # need to pad to the longest number of news in the neighboring days
+            d = d.reset_index(drop=True).reindex(range(bert_max_news ), fill_value=0)
+            tmp_bert.append(d.to_numpy().tolist())
+        tmp_tfidf = []
+        for _, d in tfidf_embedding:
+            d = d.reset_index(drop=True).reindex(range(bert_max_news ), fill_value=0)
+            tmp_tfidf.append(d.to_numpy().tolist())
+
+        out[str(td)] = [np.array(tmp_bert), np.array(tmp_tfidf)]
+
+
+
