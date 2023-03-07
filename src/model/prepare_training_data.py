@@ -98,7 +98,6 @@ class ModelDataPrep:
             )
         self.target = target.set_index('date')
 
-
     def _load_bert_embeddings(self):
         bert_embedding = pd.read_parquet(
             os.path.join(self.save_dir_path, 'pca_embedding_df.parquet.gzip')
@@ -302,7 +301,7 @@ class ModelDataPrep:
         embedding_df: pd.DataFrame,
         days_lookback: int = 5
         ) -> Dict[str, List[np.array]]:
-        """prepare embedding vectors within the range of days for given trading date
+        """prepare embedding vectors within the range of days for a given trading date
 
         Args:
             trading_dates (Iterable[datetime]): a set of trading dates
@@ -328,16 +327,20 @@ class ModelDataPrep:
             bert_max_news = max([len(e) for e in dict(list(bert_embedding)).values()])
             for _, d in bert_embedding:
                 # need to pad to the longest number of news in the neighboring days
-                d = d.reset_index(drop=True).reindex(range(bert_max_news ), fill_value=0)
+                d = d.reset_index(drop=True).reindex(range(bert_max_news), fill_value=0)
                 tmp_bert.append(d.to_numpy().tolist())
             tmp_tfidf = []
             for _, d in tfidf_embedding:
-                d = d.reset_index(drop=True).reindex(range(bert_max_news ), fill_value=0)
+                d = d.reset_index(drop=True).reindex(range(bert_max_news), fill_value=0)
                 tmp_tfidf.append(d.to_numpy().tolist())
 
             out[str(td)] = [np.array(tmp_bert), np.array(tmp_tfidf)]
 
         return out
+
+    @staticmethod
+    def _create_dataset(label_df: pd.DataFrame, embedding_lookup: Dict[str, np.array]):
+        ...
 
 
 
@@ -378,6 +381,10 @@ if __name__ == '__main__':
             tmp_tfidf.append(d.to_numpy().tolist())
 
         out[str(td)] = [np.array(tmp_bert), np.array(tmp_tfidf)]
+
+    # use a tuple to create features and label
+    features, labels = (np.random.sample((100,2)), np.random.sample((100,1)))
+    dataset = tf.data.Dataset.from_tensor_slices((features,labels))
 
 
 
