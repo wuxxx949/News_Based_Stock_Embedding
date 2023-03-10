@@ -299,7 +299,7 @@ class ModelDataPrep:
         trading_dates: Iterable[datetime],
         news_dates: Iterable[datetime],
         embedding_df: pd.DataFrame,
-        days_lookback: int = 5
+        days_lookback: int = 5,
         ) -> Dict[str, List[np.array]]:
         """prepare embedding vectors within the range of days for a given trading date
 
@@ -339,9 +339,63 @@ class ModelDataPrep:
         return out
 
     @staticmethod
-    def _create_dataset(label_df: pd.DataFrame, embedding_lookup: Dict[str, np.array]):
-        ...
+    def _create_dataset(
+        label_df: pd.DataFrame,
+        embedding_lookup: Dict[str, np.array],
+        batch_size: int = 32
+        ):
+        label = label_df['target'].to_numpy()
+        ticker = label_df['ticker'].to_numpy()
+        dates = [str(e.date()) for e in label_df.index.to_pydatetime()]
+        bert_embeddings = [embedding_lookup.get(e, [None, None])[0] for e in dates]
+        tfidf_embeddings = [embedding_lookup.get(e, [None, None])[1] for e in dates]
 
+        def generator():
+            for be, te, t, l in zip(bert_embeddings, tfidf_embeddings, ticker, label):
+                if bert_embeddings is not None:
+                    yield (be, te, t), l
+
+        dataset = tf.data.Dataset \
+            .from_generator(
+                generator,
+                output_types=((tf.float32, tf.float32, tf.string), tf.int8),
+                output_shapes=(((5, None, 256), (5, None, 64), ()), ())
+                ) \
+            .padded_batch(
+                batch_size,
+                padded_shapes=(((5, None, 256), (5, None, 64), ()), ())
+                )
+
+        return dataset
+
+    def create_dataset(self, days_lookback: int = 5, batch_size: int = 32):
+        train_df, train_target, valid_df, valid_target = self.prep_raw_model_data()
+        # training dataset
+        training_embedding_lookup = self._fetch_embeddings(
+            trading_dates=self.training_trading_date,
+            news_dates=self.training_news_date,
+            embedding_df=train_df,
+            days_lookback=days_lookback
+            )
+        training_dataset = self._create_dataset(
+            label_df=train_target,
+            embedding_lookup=training_embedding_lookup,
+            batch_size=batch_size
+        )
+        # validation dataset
+        validation_embedding_lookup = self._fetch_embeddings(
+            trading_dates=self.validation_trading_date,
+            news_dates=self.validation_news_date,
+            embedding_df=valid_df,
+            days_lookback=days_lookback
+            )
+        validation_dataset = self._create_dataset(
+            label_df=valid_target,
+            embedding_lookup=validation_embedding_lookup,
+            batch_size=batch_size
+        )
+
+        return training_dataset, validation_dataset
 
 
 if __name__ == '__main__':
@@ -382,9 +436,19 @@ if __name__ == '__main__':
 
         out[str(td)] = [np.array(tmp_bert), np.array(tmp_tfidf)]
 
+    label_df = train_target
+    embedding_lookup = out
+
+
+    from src.data.stock_data import get_tickers
+
+    tickers = get_tickers(
+        dir_path='/home/timnaka123/Documents/stock_embedding_nlp/src/data/',
+        obj_name='qualified_tickers.pickle'
+    )
     # use a tuple to create features and label
-    features, labels = (np.random.sample((100,2)), np.random.sample((100,1)))
-    dataset = tf.data.Dataset.from_tensor_slices((features,labels))
+    f1, f2, labels = (np.random.sample((100,2)), np.random.choice(tickers, 100), np.random.sample((100,1)))
+    dataset = tf.data.Dataset.from_tensor_slices(((f1, f2),labels))
 
 
 
