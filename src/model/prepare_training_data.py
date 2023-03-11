@@ -342,7 +342,8 @@ class ModelDataPrep:
     def _create_dataset(
         label_df: pd.DataFrame,
         embedding_lookup: Dict[str, np.array],
-        batch_size: int = 32
+        batch_size: int = 32,
+        seed: int = 42
         ):
         label = label_df['target'].to_numpy()
         ticker = label_df['ticker'].to_numpy()
@@ -351,8 +352,12 @@ class ModelDataPrep:
         tfidf_embeddings = [embedding_lookup.get(e, [None, None])[1] for e in dates]
 
         def generator():
+            np.random.default_rng(seed).shuffle(bert_embeddings)
+            np.random.default_rng(seed).shuffle(tfidf_embeddings)
+            np.random.default_rng(seed).shuffle(ticker)
+            np.random.default_rng(seed).shuffle(label)
             for be, te, t, l in zip(bert_embeddings, tfidf_embeddings, ticker, label):
-                if bert_embeddings is not None:
+                if be is not None:
                     yield (be, te, t), l
 
         dataset = tf.data.Dataset \
