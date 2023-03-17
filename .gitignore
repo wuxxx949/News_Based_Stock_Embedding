@@ -1,5 +1,7 @@
 # ignore everything
 *
+
+!/**/
 # add whitelist
 !.gitignore
-!.py
+!*.py
