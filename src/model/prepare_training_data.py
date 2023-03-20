@@ -1,6 +1,7 @@
 import datetime as dt
 import os
 from datetime import datetime
+from itertools import chain
 from typing import Dict, Iterable, List, Optional, Tuple
 
 import numpy as np
@@ -280,19 +281,27 @@ class ModelDataPrep:
 
     @lazyproperty
     def training_trading_date(self) -> List[datetime]:
-        return list(set(to_date(self.training_target.index)))
+        return to_date(self.training_target.index.unique().sort_values())
 
     @lazyproperty
     def validation_trading_date(self) -> List[datetime]:
-        return list(set(to_date(self.validation_target.index)))
+        return to_date(self.validation_target.index.unique().sort_values())
+
+    @lazyproperty
+    def trading_date(self) -> List[datetime]:
+        return list(chain(self.training_trading_date, self.validation_trading_date))
 
     @lazyproperty
     def training_news_date(self) -> List[datetime]:
-        return list(set(to_date(self.training_bert_df.index)))
+        return to_date(self.training_bert_df.index.unique().sort_values())
 
     @lazyproperty
     def validation_news_date(self) -> List[datetime]:
-        return list(set(to_date(self.validation_bert_df.index)))
+        return to_date(self.validation_bert_df.index.unique().sort_values())
+
+    @lazyproperty
+    def news_date(self):
+        return list(chain(self.training_news_date, self.validation_news_date))
 
     @staticmethod
     def _fetch_embeddings(
@@ -342,8 +351,7 @@ class ModelDataPrep:
     def _create_dataset(
         label_df: pd.DataFrame,
         embedding_lookup: Dict[str, np.array],
-        batch_size: int = 32,
-        seed: int = 42
+        batch_size: int = 32
         ):
         label = label_df['target'].to_numpy()
         ticker = label_df['ticker'].to_numpy()
@@ -352,10 +360,10 @@ class ModelDataPrep:
         tfidf_embeddings = [embedding_lookup.get(e, [None, None])[1] for e in dates]
 
         def generator():
-            np.random.default_rng(seed).shuffle(bert_embeddings)
-            np.random.default_rng(seed).shuffle(tfidf_embeddings)
-            np.random.default_rng(seed).shuffle(ticker)
-            np.random.default_rng(seed).shuffle(label)
+            # np.random.default_rng(seed).shuffle(bert_embeddings)
+            # np.random.default_rng(seed).shuffle(tfidf_embeddings)
+            # np.random.default_rng(seed).shuffle(ticker)
+            # np.random.default_rng(seed).shuffle(label)
             for be, te, t, l in zip(bert_embeddings, tfidf_embeddings, ticker, label):
                 if be is not None:
                     yield (be, te, t), l
@@ -373,32 +381,87 @@ class ModelDataPrep:
 
         return dataset
 
-    def create_dataset(self, days_lookback: int = 5, batch_size: int = 32):
+    def random_split_data(self):
+        # TODO: need to refactor for random split
+        train_df1, train_target1, valid_df1, valid_target1 = self.prep_raw_model_data()
+        # news_df = pd.concat([train_df1, valid_df1])
+        target_df = pd.concat([train_target1, valid_target1])
+        # all trading date
+        all_trading_dates = target_df.index.unique().to_list()
+        # sample training trading dates
+        train_dates = np.random.choice(
+            all_trading_dates,
+            size=int(0.8 * len(all_trading_dates)),
+            replace=False
+            )
+
+        train_target_mask = target_df.index.isin(train_dates)
+        train_target = target_df.loc[train_target_mask, :].sample(frac = 1)
+        valid_target = target_df.loc[~train_target_mask, :]
+
+        return train_target, valid_target
+
+    def create_dataset(
+        self,
+        split_method: str,
+        days_lookback: int = 5,
+        batch_size: int = 32):
+        """create modeling dataset
+
+        Args:
+            split_method (str): how to split data into training and validation
+            days_lookback (int, optional): _description_. Defaults to 5.
+            batch_size (int, optional): _description_. Defaults to 32.
+            seed (int, optional): _description_. Defaults to 42.
+
+        Returns:
+            _type_: _description_
+        """
         train_df, train_target, valid_df, valid_target = self.prep_raw_model_data()
-        # training dataset
-        training_embedding_lookup = self._fetch_embeddings(
-            trading_dates=self.training_trading_date,
-            news_dates=self.training_news_date,
-            embedding_df=train_df,
-            days_lookback=days_lookback
+        if split_method == 'time':
+            # training dataset
+            training_embedding_lookup = self._fetch_embeddings(
+                trading_dates=self.training_trading_date,
+                news_dates=self.training_news_date,
+                embedding_df=train_df,
+                days_lookback=days_lookback
+                )
+            training_dataset = self._create_dataset(
+                label_df=train_target,
+                embedding_lookup=training_embedding_lookup,
+                batch_size=batch_size
             )
-        training_dataset = self._create_dataset(
-            label_df=train_target,
-            embedding_lookup=training_embedding_lookup,
-            batch_size=batch_size
-        )
-        # validation dataset
-        validation_embedding_lookup = self._fetch_embeddings(
-            trading_dates=self.validation_trading_date,
-            news_dates=self.validation_news_date,
-            embedding_df=valid_df,
-            days_lookback=days_lookback
+            # validation dataset
+            validation_embedding_lookup = self._fetch_embeddings(
+                trading_dates=self.validation_trading_date,
+                news_dates=self.validation_news_date,
+                embedding_df=valid_df,
+                days_lookback=days_lookback
+                )
+            validation_dataset = self._create_dataset(
+                label_df=valid_target,
+                embedding_lookup=validation_embedding_lookup,
+                batch_size=batch_size
             )
-        validation_dataset = self._create_dataset(
-            label_df=valid_target,
-            embedding_lookup=validation_embedding_lookup,
-            batch_size=batch_size
-        )
+        elif split_method == 'random':
+            train_target_random, valid_target_random = self.random_split_data()
+            embedding_lookup = self._fetch_embeddings(
+                trading_dates=self.trading_date,
+                news_dates=self.news_date,
+                embedding_df=pd.concat([train_df, valid_df]),
+                days_lookback=days_lookback
+            )
+            training_dataset = self._create_dataset(
+                label_df=train_target_random,
+                embedding_lookup=embedding_lookup,
+                batch_size=batch_size
+            )
+            validation_dataset = self._create_dataset(
+                label_df=valid_target_random,
+                embedding_lookup=embedding_lookup,
+                batch_size=batch_size
+            )
+
 
         return training_dataset, validation_dataset
 
