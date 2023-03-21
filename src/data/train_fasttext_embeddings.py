@@ -8,30 +8,7 @@ import numpy as np
 
 from src.data.extract_headline import single_file_process
 from src.data.sp500 import hist_sp500
-from src.data.utils import pickle_results
-
-
-def get_path(dir_path: str) -> List[str]:
-    """get all news article file paths
-
-    Args:
-        dir_path (str): directory contains all news
-
-    Returns:
-        List[str]: news file paths
-    """
-    path_lst = []
-    subdirs = os.listdir(dir_path)
-    for subdir in subdirs:
-        # avoid hidden file
-        if subdir.startswith('.'):
-            continue
-        # assume two layer folder structure
-        news_paths = os.listdir(os.path.join(dir_path, subdir))
-        for path in news_paths:
-            path_lst.append(os.path.join(dir_path, subdir, path))
-
-    return path_lst
+from src.data.utils import get_path, pickle_results
 
 
 def get_news_path(
@@ -39,6 +16,16 @@ def get_news_path(
     bloomberg_dir: str,
     seed: int = 42
     ) -> List[Tuple[str, str]]:
+    """fetch path and randomize order for all news sources
+
+    Args:
+        reuters_dir (str): Reuters news directory
+        bloomberg_dir (str): Bloomberg news directory
+        seed (int, optional): random number seed. Defaults to 42.
+
+    Returns:
+        List[Tuple[str, str]]: list of tuples of headline and type
+    """
     rpaths = get_path(reuters_dir)
     bpaths = get_path(bloomberg_dir)
 

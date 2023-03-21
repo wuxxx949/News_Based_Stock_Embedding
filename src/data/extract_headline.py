@@ -1,13 +1,9 @@
-import collections
-import multiprocessing as mp
 import os
-import pickle
 import re
 from string import punctuation
-from typing import Any, List, Tuple
+from typing import List, Tuple
 
 from src.data.sp500 import hist_sp500
-from src.data.utils import STOPWORDS
 
 
 punc_pattern = '([' + ''.join(punctuation) + '])'
@@ -34,7 +30,7 @@ def reuters_single_file_process(
     tickers: List[str],
     rm_punctuation: bool
     ) -> Tuple[List[str], str]:
-    """find all matched ticker in a news
+    """find all matched ticker in a Reuters news and fetch headline
 
     Args:
         path (str): path of a news file
@@ -47,7 +43,7 @@ def reuters_single_file_process(
             lines = f.readlines()
     except Exception:
         print(f'fail to load file: {path}')
-        return [], '', ''
+        return [], ''
 
     # remove meta info and line breakers
     headline = lines[0]
@@ -71,12 +67,20 @@ def bloomberg_single_file_process(
     tickers: List[str],
     rm_punctuation: bool
     ) -> Tuple[List[str], str]:
+    """find all matched ticker in bloomberg news and fetch headline
+
+    Args:
+        path (str): path of a news file
+
+    Returns:
+        List[str]: ticker(s) mentioned in the news
+    """
     try:
         with open(path, 'r', encoding="utf8") as f:
             lines = f.readlines()
     except Exception:
         print(f'fail to load file: {path}')
-        return [], '', ''
+        return [], ''
 
     headline = lines[0]
     headline = re.sub('‘|’|“|”', "'", headline)
@@ -91,6 +95,23 @@ def bloomberg_single_file_process(
         matched = []
 
     headline = process_punc(text=headline, rm_punc=rm_punctuation)
+
+    return matched, headline
+
+def single_file_process(
+    news_type: str,
+    path: str,
+    tickers: List[str],
+    rm_punctuation: bool
+    ) -> Tuple[List[str], str]:
+    try:
+        if news_type == 'r':
+            matched, headline = reuters_single_file_process(path, tickers, rm_punctuation)
+        else:
+            matched, headline = bloomberg_single_file_process(path, tickers, rm_punctuation)
+    except Exception as e:
+        print(f'{path}: {e}')
+        matched, headline = [], ''
 
     return matched, headline
 
