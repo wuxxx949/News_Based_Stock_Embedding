@@ -1,7 +1,6 @@
 import multiprocessing as mp
 import os
 import re
-from functools import partial
 from typing import List, Optional, Tuple
 
 import numpy as np
@@ -9,17 +8,22 @@ import pandas as pd
 from sklearn import decomposition
 from transformers import BertTokenizer, TFBertModel
 
-from src.data.explore import get_path, pickle_results
 from src.data.sp500 import hist_sp500
+from src.data.utils import (create_uuid_from_string, get_path, longest_line,
+                            pickle_results)
 
-# test path
-file = 'us-aig-idUSTRE62E0GQ20100315'
-folder = '/home/timnaka123/Documents/financial-news-dataset/ReutersNews106521/20100315'
 
-folder = '/home/timnaka123/Documents/financial-news-dataset/ReutersNews106521/20130103'
-file = 'us-usa-transocean-settlement-idUSBRE9020H720130103'
-path = os.path.join(folder, file)
-tickers = hist_sp500['2013/01/31']
+def get_news_path(reuters_dir: str, bloomberg_dir: str) -> List[str]:
+    """fetch path for all news sources
+
+    Args:
+        reuters_dir (str): Reuters news directory
+        bloomberg_dir (str): Bloomberg news directory
+
+    Returns:
+        List[str]: list of paths
+    """
+    return get_path(reuters_dir) + get_path(bloomberg_dir)
 
 
 def single_file_process(path: str) -> str:
@@ -34,67 +38,39 @@ def single_file_process(path: str) -> str:
     try:
         with open(path, 'r', encoding="utf8") as f:
             lines = f.readlines()
+        headline = lines[0]
+        headline = re.sub('^-- ', r'', headline)
+        headline = re.sub('\n$', r'', headline)
+        headline = re.sub(r' +', ' ', headline)
     except Exception:
         print(f'fail to load file: {path}')
         return None
 
-    # remove meta info and line breakers
-    del lines[1:7]
-
-    # remove reporter info
-    try:
-        # match last right parenthesis but no ) in between
-        # [^)]* match any thing but not ')', [^(]* also works
-        lines[-1] = re.sub(r'\([^)]*\)$', '', lines[-1])
-        lines[0] =  re.sub(r'-- ', '', lines[0])
-    except Exception:
-        print(f'empty file: {path}')
-        return None
-
-    try:
-        # remove Reuters and location at beginning
-        lines[1] = re.sub(r'^.*\(Reuters\) - ', '', lines[1])
-    except Exception:
-        pass
-
-    news_text = ' '.join(lines)
-
-    # remove tickers
-    # pattern = f"\(( {'.N | '.join(tickers)+ '.N '})\)"
-    pattern = f"\( [^)]*\.N \)"
-    news_text = re.sub(pattern, '', news_text)
-
-    # insert [SEP]
-    # pattern = r"(?<=\. )(?=[A-Z1-9])"
-    # news_text = re.sub(pattern, r'[SEP] ', news_text)
-    # news_text = re.sub('\n', r' [SEP]', news_text)
-
-    # keep at most one space
-    news_text = re.sub(r'\s+', ' ', news_text)
-
-    # news_text = ' '.join(news_text.split(' ')[:512])
-
-    # # retain N in ticker but remove '.' so we can train ticker embedding
-    # training_text = re.sub(r'\.N', 'N', news_text)
-    # training_text = re.sub(r'U\.S\.', 'us', news_text)
-    # # remove non-alphabetical and stop words for embedding training
-    # training_text = re.sub(r'[^a-zA-Z ]', ' ', training_text)
-
-    return news_text
+    return headline
 
 
 def bert_processing(path: str) -> Tuple[str, str, str]:
-    date = [e for e in path.split('/')[1:] if len(re.sub(r'[0-9]', '', e)) == 0][0]
+    """fetch date, news
+
+    Args:
+        path (str): _description_
+
+    Returns:
+        Tuple[str, str, str]: _description_
+    """
+    # TODO: make it os agnostic
+    date = [e for e in path.split('/')[1:] if len(re.sub(r'[0-9]|-', '', e)) == 0][0]
+    date = re.sub(r'[^0-9]', '', date)
     file_name = path.split('/')[-1]
-    news_id = file_name.split('-')[-1]
+    news_id = create_uuid_from_string(file_name)
 
     return date, news_id, single_file_process(path)
 
 
 def embedding_batch_preprocessing(
-        paths: List[str],
-        ncores: Optional[int] = None,
-        ) -> List[Tuple[str, str, str]]:
+    paths: List[str],
+    ncores: Optional[int] = None,
+    ) -> List[Tuple[str, str, str]]:
     """preprocess news text for Bert embedding
 
     Args:
@@ -103,7 +79,7 @@ def embedding_batch_preprocessing(
         ncores (Optional[int], optional): number of workers for mp. Defaults to None.
 
     Returns:
-        List[Tuple[str, str, str]]: date and processed news text
+        List[Tuple[str, str, str]]: date, news_id, and processed news text
     """
     ncores = ncores if ncores is not None else mp.cpu_count()
     with mp.Pool(processes=ncores) as p:
@@ -113,16 +89,17 @@ def embedding_batch_preprocessing(
 
 
 def bert_embedding(
-        input: Tuple[str, str, str],
-        tokenizer,
-        model
-        ) -> List[Tuple[str, np.array]]:
+    input: Tuple[str, str, str],
+    tokenizer,
+    max_len: int,
+    model
+    ) -> List[Tuple[str, np.array]]:
     """handle input from embedding_batch_preprocessing
 
     Args:
         inpt (Tuple[str, str, str]): date, news id, and processed text
-        tickers (List[str]): _description_
         tokenizer (_type_): _description_
+        max_len (int): token length
         model (_type_): _description_
 
     Returns:
@@ -134,10 +111,11 @@ def bert_embedding(
 
     encoded_input = tokenizer(
         text,
-        max_length=512,
+        max_length=max_len,
         truncation=True,
         return_tensors='tf',
-        padding=True)
+        padding=True
+        )
 
     output = model(encoded_input)
     embedding = output.pooler_output
@@ -146,12 +124,25 @@ def bert_embedding(
 
 
 def generate_embedding(
-        all_pathes: List[str],
-        tokenizer,
-        model,
-        save_dir_path: str,
-        batch_size: int = 40,
-        ) -> pd.DataFrame:
+    all_pathes: List[str],
+    tokenizer,
+    model,
+    save_dir_path: str,
+    max_len: int,
+    batch_size: int = 1000,
+    ) -> Tuple[np.ndarray, List[str], List[str]]:
+    """produce
+
+    Args:
+        all_pathes (List[str]): _description_
+        tokenizer (_type_): _description_
+        model (_type_): _description_
+        save_dir_path (str): _description_
+        batch_size (int, optional): _description_. Defaults to 40.
+
+    Returns:
+        Tuple[np.ndarray, List[str], List[str]]: news embedding, date, and news id
+    """
     results = []
     text_input = embedding_batch_preprocessing(all_pathes)
 
@@ -164,28 +155,27 @@ def generate_embedding(
         out = bert_embedding(
             input= text_input[start_idx: end_idx],
             tokenizer=tokenizer,
+            max_len=max_len,
             model=model
             )
         results.extend(out)
 
     pickle_results(dir=save_dir_path, name='embedding_lst.pickle', obj=results)
-    embedding_df = pd.DataFrame([e[2] for e in results])
-    embedding_df['date'] =  pd.to_datetime([e[0] for e in results])
-    embedding_df['news_id'] = [e[1] for e in results]
-    embedding_df = embedding_df.set_index(['date', 'news_id'])
-    embedding_df.columns = ['c' + str(e) for e in embedding_df.columns]
+    # avoid pandas due to extremely large memory footprint
+    embedding_array = np.array([e[2] for e in results])
+    news_date = [e[0] for e in results]
+    news_id = [str(e[1]) for e in results]
 
-    embedding_save_path = os.path.join(save_dir_path, 'bert_embedding_df.parquet.gzip')
-    embedding_df.to_parquet(embedding_save_path, compression='gzip')
-
-    return embedding_df
+    return embedding_array, news_date, news_id
 
 
 def bert_compression(
-        embedding: pd.DataFrame,
-        save_dir_path: str,
-        n_component: int = 256
-        ) -> pd.DataFrame:
+    embedding_array: np.ndarray,
+    news_date: List[str],
+    news_id: List[str],
+    save_dir_path: str,
+    n_component: int = 256
+    ) -> pd.DataFrame:
     """apply PCA to reduce dimension
 
     Args:
@@ -195,9 +185,12 @@ def bert_compression(
         pd.DataFrame: PCA embedding
     """
     pca = decomposition.PCA(n_components=n_component)
-    pca_array =  pca.fit_transform(embedding)
+    pca_array =  pca.fit_transform(embedding_array)
     pca_cols = ['c' + str(i) for i in range(n_component)]
-    pca_df = pd.DataFrame(pca_array, index=embedding.index, columns=pca_cols)
+    pca_df = pd.DataFrame(pca_array, columns=pca_cols)
+    pca_df['date'] = pd.to_datetime(news_date)
+    pca_df['news_id'] = news_id
+    pca_df = pca_df.set_index(['date', 'news_id'])
 
     pca_save_path = os.path.join(save_dir_path, 'pca_embedding_df.parquet.gzip')
     pca_df.to_parquet(pca_save_path, compression='gzip')
@@ -205,32 +198,28 @@ def bert_compression(
     return pca_df
 
 if __name__ == '__main__':
-    all_pathes = get_path(
-        dir_path='/home/timnaka123/Documents/financial-news-dataset/ReutersNews106521'
-        )
+    tickers = hist_sp500['2013/01/31']
+    rdir = '/home/timnaka123/Documents/financial-news-dataset/ReutersNews106521'
+    bdir = '/home/timnaka123/Documents/financial-news-dataset/bloomberg'
+    headline_path = '/home/timnaka123/Documents/stock_embedding_nlp/src/data/headlines.txt'
+    max_headline = longest_line(headline_path)
 
-    # text_input = embedding_batch_preprocessing(all_pathes, tickers)
-
+    all_paths = get_news_path(reuters_dir=rdir, bloomberg_dir=bdir)
 
     tokenizer = BertTokenizer.from_pretrained('bert-large-uncased')
     model = TFBertModel.from_pretrained("bert-large-uncased")
 
-    embedding_df = generate_embedding(
-        all_pathes = all_pathes,
+    embedding_array, news_date, news_id = generate_embedding(
+        all_pathes = all_paths,
         tokenizer=tokenizer,
         model=model,
+        max_len=max_headline,
         save_dir_path='/home/timnaka123/Documents/stock_embedding_nlp/src/data/'
         )
 
     pca_df = bert_compression(
-        embedding=embedding_df,
+        embedding_array=embedding_array,
+        news_date=news_date,
+        news_id=news_id,
         save_dir_path='/home/timnaka123/Documents/stock_embedding_nlp/src/data/'
         )
-
-
-
-    # embedding_df.columns = ['c' + str(e) for e in embedding_df.columns]
-    # embedding_df.to_parquet(
-    #     '/home/timnaka123/Documents/stock_embedding_nlp/src/data/embedding_df.parquet.gzip',
-    #     compression='gzip'
-    #     )
