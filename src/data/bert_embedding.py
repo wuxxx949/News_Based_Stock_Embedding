@@ -9,8 +9,8 @@ from sklearn import decomposition
 from transformers import BertTokenizer, TFBertModel
 
 from src.data.sp500 import hist_sp500
-from src.data.utils import (create_uuid_from_string, get_path, longest_line,
-                            pickle_results)
+from src.data.utils import (create_uuid_from_string, get_path,
+                            headline_processing, longest_line, pickle_results)
 
 
 def get_news_path(reuters_dir: str, bloomberg_dir: str) -> List[str]:
@@ -38,12 +38,14 @@ def single_file_process(path: str) -> str:
     try:
         with open(path, 'r', encoding="utf8") as f:
             lines = f.readlines()
-        headline = lines[0]
-        headline = re.sub('^-- ', r'', headline)
-        headline = re.sub('\n$', r'', headline)
-        headline = re.sub(r' +', ' ', headline)
+        headline = headline_processing(lines[0])
+        if len(headline) == 0:
+            headline = headline_processing(lines[1])
     except Exception:
         print(f'fail to load file: {path}')
+        return None
+
+    if len(headline) <= 0: # empty string
         return None
 
     return headline
@@ -196,6 +198,7 @@ def bert_compression(
     pca_df.to_parquet(pca_save_path, compression='gzip')
 
     return pca_df
+
 
 if __name__ == '__main__':
     tickers = hist_sp500['2013/01/31']
