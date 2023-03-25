@@ -1,41 +1,13 @@
 import collections
 import multiprocessing as mp
 import os
-from typing import List, Tuple
+from typing import List
 
 import fasttext
-import numpy as np
 
 from src.data.extract_headline import single_file_process
 from src.data.sp500 import hist_sp500
-from src.data.utils import get_path, pickle_results
-
-
-def get_news_path(
-    reuters_dir: str,
-    bloomberg_dir: str,
-    seed: int = 42
-    ) -> List[Tuple[str, str]]:
-    """fetch path and randomize order for all news sources
-
-    Args:
-        reuters_dir (str): Reuters news directory
-        bloomberg_dir (str): Bloomberg news directory
-        seed (int, optional): random number seed. Defaults to 42.
-
-    Returns:
-        List[Tuple[str, str]]: list of tuples of headline and type
-    """
-    rpaths = get_path(reuters_dir)
-    bpaths = get_path(bloomberg_dir)
-
-    rtuples = list(zip(rpaths, ['r'] * len(rpaths)))
-    btuples = list(zip(bpaths, ['b'] * len(bpaths)))
-
-    all_tuples = rtuples + btuples
-    np.random.default_rng(seed).shuffle(all_tuples)
-
-    return all_tuples
+from src.data.utils import get_news_path, pickle_results
 
 
 def worker(news_type, path, tickers, rm_punctuation, q):
@@ -70,10 +42,16 @@ def news_preprocessing(
     bloomberg_data_dir_path: str,
     save_dir_path: str,
     tickers: List[str],
-    rm_punctuation: bool = False,
-    min_count: int = 200
-    ) -> List[List[str]]:
+    rm_punctuation: bool = False
+    ) -> None:
     """apply mp to process all files
+
+    Args:
+        reuters_data_dir_path (str): Reuters news dir
+        bloomberg_data_dir_path (str): Bloomberg news dir
+        save_dir_path (str): directory to save output
+        tickers (List[str]): target tickers
+        rm_punctuation (bool, optional): if remove punctuation in the headline. Defaults to False.
     """
     all_files = get_news_path(
         reuters_dir=reuters_data_dir_path,
@@ -105,11 +83,7 @@ def news_preprocessing(
 
     all_tickers = [item for sublist in results for item in sublist]
     ticker_freq = collections.Counter(all_tickers)
-    qualified = {k: v for k, v in ticker_freq.items() if v >= min_count}
     pickle_results(dir=save_dir_path, name='ticker_freq.pickle', obj=ticker_freq)
-    pickle_results(dir=save_dir_path, name='qualified_tickers.pickle', obj=qualified)
-
-    return results, qualified
 
 
 def train_word_embedding(training_file: str, dim: int=64, **kargs) -> None:
@@ -130,14 +104,14 @@ if __name__ == '__main__':
     rdir = '/home/timnaka123/Documents/financial-news-dataset/ReutersNews106521'
     bdir = '/home/timnaka123/Documents/financial-news-dataset/bloomberg'
 
-    out = news_preprocessing(
+    news_preprocessing(
         reuters_data_dir_path=rdir,
         bloomberg_data_dir_path=bdir,
         save_dir_path='/home/timnaka123/Documents/stock_embedding_nlp/src/data/',
         tickers=hist_sp500['2013/01/31']
-    )
+        )
 
     train_word_embedding(
         training_file='/home/timnaka123/Documents/stock_embedding_nlp/src/data/headlines.txt',
         epoch=7
-    )
+        )

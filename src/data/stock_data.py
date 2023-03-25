@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 
-from src.data.explore import get_path, load_pickled_obj
+from src.data.utils import get_path, load_pickled_obj
 
 
 def date_formatter(date: str) -> str:
@@ -30,20 +30,21 @@ def get_news_date_range(data_dir_path: str) -> Tuple[str, str]:
     return date_formatter(min_date), date_formatter(max_date)
 
 # TODO: to utils
-def get_tickers(dir_path: str, obj_name: str) -> List[str]:
+def get_tickers(dir_path: str, obj_name: str, min_count: int) -> List[str]:
     """fetch pickled tickers that mentioned enough times in the news
 
     Args:
         dir_path (str): pickle obj dir path
         obj_name (str): pickle obj name
+        min_count (int): min number of mentioning
 
     Returns:
         List[str]: tickers of interest
     """
-    ticker_dict = load_pickled_obj(dir_path, obj_name)
-    tickers = list(ticker_dict.keys())
+    ticker_freq = load_pickled_obj(dir_path, obj_name)
+    qualified = {k: v for k, v in ticker_freq.items() if v >= min_count}
 
-    return tickers
+    return list(qualified.keys())
 
 # TODO: to utils
 def sleep_time(loc: float, scale: float):
@@ -96,10 +97,10 @@ def daily_return_calc(price_df: pd.DataFrame) -> pd.DataFrame:
 
 
 def create_target(
-        return_df: pd.DataFrame,
-        lower_cut: float = -0.0059,
-        upper_cut: float = 0.0068
-        ) -> pd.DataFrame:
+    return_df: pd.DataFrame,
+    lower_cut: float = -0.0059,
+    upper_cut: float = 0.0068
+    ) -> pd.DataFrame:
     """generate df with target for DL
 
     Args:
@@ -111,13 +112,13 @@ def create_target(
         pd.DataFrame:
     """
 
-    def _get_target(log_return):
+    def _get_target(log_return: float):
         if log_return <= lower_cut: return 0
         if log_return >= upper_cut: return 1
         if lower_cut < log_return < upper_cut: return -1
 
-    return_df['target'] = return_df['daily_return'].apply(_get_target)
     output_df = return_df \
+        .assign(target = lambda x: x['daily_return'].apply(_get_target)) \
         .query('target >= 0') \
         .loc[:, ['date', 'ticker', 'target']] \
         .reset_index(drop=True)
@@ -128,7 +129,8 @@ def create_target(
 def main(
     news_dir_path: str,
     processed_data_dir_path: str,
-    ticker_obj_name: str
+    ticker_obj_name: str,
+    min_count: int,
     ) -> pd.DataFrame:
     """generate training target
 
@@ -144,15 +146,16 @@ def main(
 
     tickers = get_tickers(
         dir_path=processed_data_dir_path,
-        obj_name=ticker_obj_name
-    )
+        obj_name=ticker_obj_name,
+        min_count=min_count
+        )
 
     raw_daily_price = fetch_daily_price(
         tickers=tickers,
         start=min_date,
         end=max_date,
         batch_size=10
-    )
+        )
 
     return_data = daily_return_calc(raw_daily_price)
 
@@ -164,13 +167,13 @@ def main(
     return target
 
 
-
 if __name__ == '__main__':
     output = main(
         news_dir_path= '/home/timnaka123/Documents/financial-news-dataset/ReutersNews106521',
         processed_data_dir_path='/home/timnaka123/Documents/stock_embedding_nlp/src/data/',
-        ticker_obj_name='qualified_tickers.pickle'
-    )
+        ticker_obj_name='qualified_tickers.pickle',
+        min_count=150
+        )
 
     min_date, max_date = get_news_date_range(
         '/home/timnaka123/Documents/financial-news-dataset/ReutersNews106521'
@@ -179,13 +182,13 @@ if __name__ == '__main__':
     tickers = get_tickers(
         dir_path='/home/timnaka123/Documents/stock_embedding_nlp/src/data/',
         obj_name='qualified_tickers.pickle'
-    )
+        )
 
     raw_daily_price = fetch_daily_price(
         tickers=tickers,
         start=min_date,
         end=max_date,
         batch_size=10
-    )
+        )
 
     return_data = daily_return_calc(raw_daily_price)
