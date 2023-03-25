@@ -62,6 +62,7 @@ def reuters_single_file_process(
 
     return matched, headline
 
+
 def bloomberg_single_file_process(
     path: str,
     tickers: List[str],
@@ -83,6 +84,10 @@ def bloomberg_single_file_process(
         return [], ''
 
     headline = lines[0]
+    if len(re.sub(r'[^a-zA-Z]', '', headline)) == 0:
+        headline = lines[1]
+
+    # bloomberg uses different quotation mark
     headline = re.sub('‘|’|“|”', "'", headline)
 
     news_text = ' '.join(lines)
@@ -97,6 +102,7 @@ def bloomberg_single_file_process(
     headline = process_punc(text=headline, rm_punc=rm_punctuation)
 
     return matched, headline
+
 
 def single_file_process(
     news_type: str,
@@ -125,7 +131,7 @@ if __name__ == '__main__':
     print(reuters_single_file_process(path ,tickers, False))
 
     # test bloomberg path
-    bb_folder = '/home/timnaka123/Documents/financial-news-dataset/bloomberg/2013-11-20'
-    file = 'apple-says-smartphone-inventor-patent-claim-falls-shor'
+    bb_folder = '/home/timnaka123/Documents/financial-news-dataset/bloomberg/2011-01-26'
+    file = 'federal-open-market-committee-s-statement-on-monetary-policy-full-tex'
     path = os.path.join(bb_folder, file)
     print(bloomberg_single_file_process(path, tickers, False))

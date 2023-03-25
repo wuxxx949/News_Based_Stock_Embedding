@@ -1,6 +1,7 @@
 import hashlib
 import os
 import pickle
+import re
 import uuid
 from typing import Any, List
 
@@ -71,6 +72,12 @@ def longest_line(fpath: str) -> int:
 
     return max([len(e.split(' ')) for e in lines])
 
+def headline_processing(headline: str):
+    headline = re.sub('^-- ', r'', headline)
+    headline = re.sub('\n$', r'', headline)
+    headline = re.sub(r' +', ' ', headline)
+
+    return headline
 
 def create_uuid_from_string(val: str):
     hex_string = hashlib.md5(val.encode("UTF-8")).hexdigest()
