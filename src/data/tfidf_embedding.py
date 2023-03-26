@@ -18,19 +18,22 @@ model = fasttext.load_model(path=str(bin_file))
 
 
 def _tfidf_weighted_embedding(
-        x: csr_matrix,
-        news_id: List[str],
-        vectorizer):
+    x: csr_matrix,
+    news_id: List[str],
+    vectorizer
+    ):
     nzero = x.nonzero()
     nonzero_idx = list(zip(nzero[0], nzero[1]))
-    i = 0
+    # i = 0
+    i = nonzero_idx[0][0]
     results = {}
 
     tmp_embedding = 0
     for c in list(nonzero_idx):
         if c[0] > i:
             results[news_id[i]] = tmp_embedding
-            i += 1
+            # i += 1
+            i = c[0]
             tmp_embedding = 0
 
         w = vectorizer.get_feature_names_out()[c[1]]
@@ -78,29 +81,13 @@ if __name__ == '__main__':
     X = vectorizer.fit_transform(corpus)
 
     test = tfidf_weighted_embedding(
-        X,
+        x=X,
+        trained_vecterizer=vectorizer,
         news_id=news_id,
         batch_size=100
         )
 
-    nzero = X.nonzero()
-    nonzero_idx = list(zip(nzero[0], nzero[1]))
-    i = 0
-    results = {}
-    tmp = {}
-
-    for c in list(nonzero_idx):
-        if c[0] > i:
-            results[news_id[i]] = tmp
-            i += 1
-            tmp = {}
-
-        w = vectorizer.get_feature_names_out()[c[1]]
-        tfidf = X[c]
-        tmp[w] = tfidf
-
-
-
+    from scipy.sparse import csr_matrix
     corpus = [
         'This is the first document.',
         'This document is the second document.',
@@ -111,18 +98,9 @@ if __name__ == '__main__':
     X = vectorizer.fit_transform(corpus)
     vectorizer.get_feature_names_out()
 
-    nzero = X.nonzero()
-    nonzero_idx = list(zip(nzero[0], nzero[1]))
-    i = 0
-    results = {}
-    tmp = {}
+    x = X.toarray()
+    x = np.concatenate([np.array([0] * 9).reshape((1, 9)), x, np.array([0] * 9).reshape((1, 9))])
+    x[3, :] = 0
+    y = csr_matrix(x)
 
-    for c in list(nonzero_idx):
-        if c[0] > i:
-            results[i] = tmp
-            i += 1
-            tmp = {}
-
-        w = vectorizer.get_feature_names_out()[c[1]]
-        tfidf = X[c]
-        tmp[w] = tfidf
+    out = _tfidf_weighted_embedding(x=y, news_id=['a', 'b', 'c', 'd', 'e'], vectorizer=vectorizer)
