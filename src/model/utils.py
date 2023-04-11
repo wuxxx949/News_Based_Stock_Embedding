@@ -1,5 +1,5 @@
 import datetime
-from typing import List
+from typing import Iterable, List
 
 class lazyproperty:
     def __init__(self, func):
@@ -17,7 +17,7 @@ class lazyproperty:
 def extract_date(fpath: str) -> str:
     # TODO: make it OS agnostic
     # https://stackoverflow.com/questions/4579908/cross-platform-splitting-of-path-in-python
-    d = fpath.split('/')
+    d = [e.replace('-', '') for e in fpath.split('/')]
     date = [e for e in d if all([ee.isnumeric() for ee in e]) and len(e) > 0]
     if len(date) == 0:
         raise ValueError('no date in the path')
@@ -28,5 +28,5 @@ def extract_date(fpath: str) -> str:
     return date[0]
 
 
-def to_date(array) -> List[datetime.date]:
+def to_date(array: Iterable) -> List[datetime.date]:
     return [e.to_pydatetime().date() for e in array]
