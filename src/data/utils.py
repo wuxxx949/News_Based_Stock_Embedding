@@ -3,7 +3,10 @@ import os
 import pickle
 import re
 import uuid
-from typing import Any, List
+from typing import Any, List, Tuple
+
+import numpy as np
+import pandas as pd
 
 STOPWORDS = [
     'ourselves', 'hers', 'between', 'yourself', 'but', 'again', 'there', 'about', 'once',
@@ -58,6 +61,33 @@ def get_path(dir_path: str) -> List[str]:
     return path_lst
 
 
+def get_news_path(
+    reuters_dir: str,
+    bloomberg_dir: str,
+    seed: int = 42
+    ) -> List[Tuple[str, str]]:
+    """fetch path and randomize order for all news sources
+
+    Args:
+        reuters_dir (str): Reuters news directory
+        bloomberg_dir (str): Bloomberg news directory
+        seed (int, optional): random number seed. Defaults to 42.
+
+    Returns:
+        List[Tuple[str, str]]: list of news file path and type
+    """
+    rpaths = get_path(reuters_dir)
+    bpaths = get_path(bloomberg_dir)
+
+    rtuples = list(zip(rpaths, ['r'] * len(rpaths)))
+    btuples = list(zip(bpaths, ['b'] * len(bpaths)))
+
+    all_tuples = rtuples + btuples
+    np.random.default_rng(seed).shuffle(all_tuples)
+
+    return all_tuples
+
+
 def longest_line(fpath: str) -> int:
     """find the max number of tokens in a line
 
@@ -79,6 +109,21 @@ def headline_processing(headline: str):
 
     return headline
 
-def create_uuid_from_string(val: str):
+def create_uuid_from_string(val: str) -> str:
     hex_string = hashlib.md5(val.encode("UTF-8")).hexdigest()
-    return uuid.UUID(hex=hex_string)
+    return str(uuid.UUID(hex=hex_string))
+
+
+def get_target_tickers(dir: str, name: str) -> List[str]:
+    """fetch tickers of interested based on return data
+
+    Args:
+        dir (str): file directory
+        name (str): name of parquet file
+
+    Returns:
+        List[str]: list of tickers
+    """
+    return_df = pd.read_parquet(os.path.join(dir, name))
+
+    return list(return_df['ticker'].unique())

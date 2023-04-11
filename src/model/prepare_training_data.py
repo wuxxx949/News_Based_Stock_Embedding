@@ -69,7 +69,8 @@ class DateManager:
 class ModelDataPrep:
     def __init__(
         self,
-        news_path: str,
+        reuters_news_path: str,
+        bloomberg_news_path: str,
         save_dir_path: str,
         training_start_date: datetime,
         validation_start_date: datetime,
@@ -77,13 +78,15 @@ class ModelDataPrep:
         ) -> None:
         """
         Args:
-            news_path (str): path to news directory
+            reuters_news_path (str): path to reuters news directory
+            bloomberg_news_path (str): path to bloomberg news directory
             save_dir_path (str): path to news directory
             training_start_date (datetime): training start date, inclusive
             validation_start_date (datetime): validation start date, inclusive
             validation_end_date (datetime): validation end date, non-inclusive
         """
-        self.news_path = news_path
+        self.reuters_news_path = reuters_news_path
+        self.bloomberg_news_path = bloomberg_news_path
         self.save_dir_path = save_dir_path
         self.training_start_date = training_start_date
         self.validation_start_date = validation_start_date
@@ -120,7 +123,7 @@ class ModelDataPrep:
         Returns:
             List[str]: file paths of qualified files
         """
-        all_paths = get_path(self.news_path)
+        all_paths = get_path(self.reuters_news_path) + get_path(self.bloomberg_news_path)
         min_date_str = datetime.strftime(min_date, '%Y%m%d')
         max_date_str = datetime.strftime(max_date, '%Y%m%d')
 
@@ -163,16 +166,16 @@ class ModelDataPrep:
         if end_date is None:
             end_date = tfidf_end_date
 
-        # training peroid data
+        # training period data
         tfidf_news_files = self._news_file_filter(tfidf_start_date, tfidf_end_date)
         input_data = embedding_batch_preprocessing(paths=tfidf_news_files)
         tfidf_corpus = [e[2] for e in input_data if e[2] is not None]
         tfidf_news_id = [e[1] for e in input_data if e[2] is not None]
 
-        vectorizer = TfidfVectorizer(min_df=0.05, stop_words=STOPWORDS, dtype=np.float32)
+        vectorizer = TfidfVectorizer(min_df=0.0005, stop_words=STOPWORDS, dtype=np.float32)
         vectorizer.fit(tfidf_corpus)
 
-        if (start_date is None) and (end_date is None):
+        if (start_date == tfidf_start_date) and (end_date == tfidf_end_date):
             corpus = tfidf_corpus
             news_id = tfidf_news_id
         else:
@@ -186,7 +189,8 @@ class ModelDataPrep:
         out = tfidf_weighted_embedding(
             x=X,
             trained_vecterizer=vectorizer,
-            news_id=news_id)
+            news_id=news_id
+            )
 
         return self._tfidf_to_df(out)
 
@@ -381,9 +385,14 @@ class ModelDataPrep:
 
         return dataset
 
-    def random_split_data(self):
+    def random_split_data(self) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """randomly split dates
+
+        Returns:
+            Tuple[pd.DataFrame, pd.DataFrame]: training and validation target df
+        """
         # TODO: need to refactor for random split
-        train_df1, train_target1, valid_df1, valid_target1 = self.prep_raw_model_data()
+        _, train_target1, _, valid_target1 = self.prep_raw_model_data()
         # news_df = pd.concat([train_df1, valid_df1])
         target_df = pd.concat([train_target1, valid_target1])
         # all trading date
@@ -396,6 +405,7 @@ class ModelDataPrep:
             )
 
         train_target_mask = target_df.index.isin(train_dates)
+        # randomize training order
         train_target = target_df.loc[train_target_mask, :].sample(frac = 1)
         valid_target = target_df.loc[~train_target_mask, :]
 

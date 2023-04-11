@@ -81,7 +81,7 @@ def embedding_batch_preprocessing(
         ncores (Optional[int], optional): number of workers for mp. Defaults to None.
 
     Returns:
-        List[Tuple[str, str, str]]: date, news_id, and processed news text
+        List[Tuple[str, str, str]]: date, news_id, and processed news headlines
     """
     ncores = ncores if ncores is not None else mp.cpu_count()
     with mp.Pool(processes=ncores) as p:

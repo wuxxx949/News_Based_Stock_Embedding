@@ -175,20 +175,3 @@ if __name__ == '__main__':
         min_count=150
         )
 
-    min_date, max_date = get_news_date_range(
-        '/home/timnaka123/Documents/financial-news-dataset/ReutersNews106521'
-        )
-
-    tickers = get_tickers(
-        dir_path='/home/timnaka123/Documents/stock_embedding_nlp/src/data/',
-        obj_name='qualified_tickers.pickle'
-        )
-
-    raw_daily_price = fetch_daily_price(
-        tickers=tickers,
-        start=min_date,
-        end=max_date,
-        batch_size=10
-        )
-
-    return_data = daily_return_calc(raw_daily_price)
