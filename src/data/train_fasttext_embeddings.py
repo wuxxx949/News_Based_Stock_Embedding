@@ -5,7 +5,7 @@ from typing import List
 
 import fasttext
 
-from src.data.extract_headline import single_file_process
+from data.extract_news import single_file_process
 from src.data.sp500 import hist_sp500
 from src.data.utils import get_news_path, pickle_results
 
