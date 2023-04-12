@@ -9,12 +9,16 @@ from src.data.sp500 import hist_sp500
 punc_pattern = '([' + ''.join(punctuation) + '])'
 
 def process_punc(text: str, rm_punc: bool) -> str:
+    # make each sentence in a newline
+    pattern = r"(?<=\. )(?=[A-Z1-9])"
+    text = re.sub(pattern, r'\n', text)
+
     if rm_punc:
         text = re.sub(r'U\.S\.', 'us', text)
         text = re.sub(r'U\.K\.', 'uk', text)
         text = re.sub(punc_pattern, ' ', text)
     else:
-        # rm '-' as it always appears in the beginning
+        # rm '--' as it always appears in the beginning
         text = re.sub('^-- ', r'', text)
         # rm line break in the end
         text = re.sub('\n$', r'', text)
@@ -46,8 +50,24 @@ def reuters_single_file_process(
         return [], ''
 
     # remove meta info and line breakers
-    headline = lines[0]
+    del lines[1:7]
 
+    # remove reporter info
+    try:
+        # match last right parenthesis but no ) in between
+        # [^)]* match any thing but not ')', [^(]* also works
+        lines[-1] = re.sub(r'\([^)]*\)$', '', lines[-1])
+    except Exception:
+        print(f'empty file: {path}')
+        return [], ''
+
+    try:
+        # remove Reuters and location
+        lines[1] = re.sub(r'^.*\(Reuters\)', '', lines[1])
+    except Exception:
+        pass
+
+    # fetch ticker mentioned, ( AAPL.N ) -> AAPL
     news_text = ' '.join(lines)
     pattern = '.N | '.join(tickers) + '.N '
     regexp = re.compile(pattern)
@@ -55,12 +75,17 @@ def reuters_single_file_process(
 
     if len(matched) > 0:
         matched = [re.sub(r'\.N| ', '', e) for e in matched]
+        # normalized ticker
+        # (\w+): apturing group with one or more letters
+        pattern = r"(\s?\(\s(\w+)\.N\s\)\s?)"
+        # backreference \2 to replace the matched pattern with the contents of the second capturing group.
+        news_text = re.sub(pattern, r' \2 ', news_text)
     else:
         matched = []
 
-    headline = process_punc(text=headline, rm_punc=rm_punctuation)
+    news_text = process_punc(text=news_text, rm_punc=rm_punctuation)
 
-    return matched, headline
+    return matched, news_text
 
 
 def bloomberg_single_file_process(
