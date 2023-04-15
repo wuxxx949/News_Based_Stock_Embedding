@@ -1,6 +1,7 @@
 import hashlib
 import os
 import pickle
+import random
 import re
 import uuid
 from typing import Any, List, Tuple
@@ -59,6 +60,23 @@ def get_path(dir_path: str) -> List[str]:
             path_lst.append(os.path.join(dir_path, subdir, path))
 
     return path_lst
+
+
+def sample_news(dir_path: str) -> str:
+    """sample one news path from a folder
+    """
+    all_path = get_path(dir_path=dir_path)
+
+    return random.choice(all_path)
+
+
+def get_raw_news(news_path: str) -> str:
+    """fetch the raw news text
+    """
+    with open(news_path, 'r', encoding="utf8") as f:
+        lines = f.readlines()
+
+    return ' '.join(lines)
 
 
 def get_news_path(

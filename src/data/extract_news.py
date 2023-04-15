@@ -10,8 +10,8 @@ punc_pattern = '([' + ''.join(punctuation) + '])'
 
 def process_punc(text: str, rm_punc: bool) -> str:
     # make each sentence in a newline
-    pattern = r"(?<=\. )(?=[A-Z1-9])"
-    text = re.sub(pattern, r'\n', text)
+    # pattern = r"(?<=\. )(?=[A-Z1-9])"
+    # text = re.sub(pattern, r'\n', text)
 
     if rm_punc:
         text = re.sub(r'U\.S\.', 'us', text)
@@ -29,9 +29,25 @@ def process_punc(text: str, rm_punc: bool) -> str:
 
     return text
 
+
+def break_sentence(text: str) -> str:
+    """Add '\n' at the end of each sentence
+
+    Args:
+        text (str): input text
+
+    Returns:
+        str: output text with line breaker
+    """
+    # looks for periods, question marks or exclamation marks
+    # followed by a space and a capital letter
+    sentences = re.split(r'(?<=[^A-Z].[.?!]) +(?=[A-Z])', text)
+
+    return"\n".join(sentences)
+
+
 def reuters_single_file_process(
     path: str,
-    tickers: List[str],
     rm_punctuation: bool
     ) -> Tuple[List[str], str]:
     """find all matched ticker in a Reuters news and fetch headline
@@ -69,19 +85,19 @@ def reuters_single_file_process(
 
     # fetch ticker mentioned, ( AAPL.N ) -> AAPL
     news_text = ' '.join(lines)
-    pattern = '.N | '.join(tickers) + '.N '
-    regexp = re.compile(pattern)
-    matched = set(regexp.findall(news_text))
+    matched = set(re.findall(r"\s[A-Z]+\.[N|O|OQ]\s", news_text))
 
     if len(matched) > 0:
-        matched = [re.sub(r'\.N| ', '', e) for e in matched]
-        # normalized ticker
+        matched = [re.sub(r'\.[N|O|OQ]| ', '', e) for e in matched]
+        # normalize ticker
         # (\w+): apturing group with one or more letters
-        pattern = r"(\s?\(\s(\w+)\.N\s\)\s?)"
+        pattern = r"(\s?\(\s([A-Z]+)\.[N|O|OQ]\s\)\s?)"
         # backreference \2 to replace the matched pattern with the contents of the second capturing group.
         news_text = re.sub(pattern, r' \2 ', news_text)
     else:
         matched = []
+
+    news_text = break_sentence(news_text)
 
     news_text = process_punc(text=news_text, rm_punc=rm_punctuation)
 
@@ -90,7 +106,6 @@ def reuters_single_file_process(
 
 def bloomberg_single_file_process(
     path: str,
-    tickers: List[str],
     rm_punctuation: bool
     ) -> Tuple[List[str], str]:
     """find all matched ticker in bloomberg news and fetch headline
@@ -108,38 +123,50 @@ def bloomberg_single_file_process(
         print(f'fail to load file: {path}')
         return [], ''
 
-    headline = lines[0]
-    if len(re.sub(r'[^a-zA-Z]', '', headline)) == 0:
-        headline = lines[1]
-
-    # bloomberg uses different quotation mark
-    headline = re.sub('‘|’|“|”', "'", headline)
+    # remove text after --
+    for i in range(len(lines)):
+        lines[i] = '' if lines[i][:2] == '--' else lines[i]
 
     news_text = ' '.join(lines)
-    pattern = '\(' + '\)|\('.join(tickers) + '\)'
-    regexp = re.compile(pattern)
-    matched = set(regexp.findall(news_text))
+    # remove timestamp
+    news_text = re.sub(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z', '', news_text)
+    # remove random \n
+    news_text = re.sub('\n', '', news_text)
+    # bloomberg uses different quotation mark
+    news_text = re.sub('‘|’|“|”', "'", news_text)
+
+    # remove editor and reporter contact info
+    pattern = r"To contact the(.*?)bloomberg\.net"
+    # re.DOTALL flag to make it match newlines as well.
+    news_text = re.sub(pattern , '', news_text, flags=re.DOTALL)
+    news_text = break_sentence(news_text)
+
+    # find mentioned tickers
+    # pattern = '\(' + '\)|\('.join(tickers) + '\)'
+    pattern = r"\(([A-Z.]+)\)"
+    matched = list(set(re.findall(pattern, news_text)))
+
     if len(matched) > 0:
-        matched =  [re.search(r'\((.*?)\)',s).group(1) for s in matched]
+        # normalize ticker
+        news_text = re.sub(r'\s?\(([A-Z.]+)\)\s?', r' \1 ', news_text)
     else:
         matched = []
 
-    headline = process_punc(text=headline, rm_punc=rm_punctuation)
+    news_text = process_punc(text=news_text, rm_punc=rm_punctuation)
 
-    return matched, headline
+    return matched, news_text
 
 
 def single_file_process(
     news_type: str,
     path: str,
-    tickers: List[str],
     rm_punctuation: bool
     ) -> Tuple[List[str], str]:
     try:
         if news_type == 'r':
-            matched, headline = reuters_single_file_process(path, tickers, rm_punctuation)
+            matched, headline = reuters_single_file_process(path, rm_punctuation)
         else:
-            matched, headline = bloomberg_single_file_process(path, tickers, rm_punctuation)
+            matched, headline = bloomberg_single_file_process(path, rm_punctuation)
     except Exception as e:
         print(f'{path}: {e}')
         matched, headline = [], ''
@@ -148,15 +175,24 @@ def single_file_process(
 
 
 if __name__ == '__main__':
+    from src.data.utils import sample_news, get_raw_news
     # test reuters path
     file = 'us-aig-idUSTRE62E0GQ20100315'
     folder = '/home/timnaka123/Documents/financial-news-dataset/ReutersNews106521/20100315'
-    path = os.path.join(folder, file)
-    tickers=hist_sp500['2013/01/31']
-    print(reuters_single_file_process(path ,tickers, False))
+    path = sample_news('/home/timnaka123/Documents/financial-news-dataset/ReutersNews106521/')
+    # path = os.path.join(folder, file)
+    out = reuters_single_file_process(path, False)
+    print(get_raw_news(path))
+    print(out[0])
+    print(out[1])
 
     # test bloomberg path
     bb_folder = '/home/timnaka123/Documents/financial-news-dataset/bloomberg/2011-01-26'
     file = 'federal-open-market-committee-s-statement-on-monetary-policy-full-tex'
-    path = os.path.join(bb_folder, file)
-    print(bloomberg_single_file_process(path, tickers, False))
+    # bb_folder = '/home/timnaka123/Documents/financial-news-dataset/bloomberg/2011-09-26'
+    # file = 'apple-cuts-ipad-supply-chain-orders-jpmorgan'
+    path = sample_news('/home/timnaka123/Documents/financial-news-dataset/bloomberg/')
+    out = bloomberg_single_file_process(path, False)
+    print(get_raw_news(path))
+    print(out[0])
+    print(out[1])
