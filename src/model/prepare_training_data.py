@@ -19,22 +19,48 @@ from src.model.utils import extract_date, lazyproperty, to_date
 class DateManager:
     """manage date related task for model and portfolio optimization
     """
-    def __init__(self, news_path: str) -> None:
+    def __init__(
+        self,
+        reuters_news_path: str,
+        bloomberg_news_path: str
+        ) -> None:
         """
         Args:
             news_path (str): path to news directory
         """
-        self.news_path = news_path
+        self.reuters_news_path = reuters_news_path
+        self.bloomberg_news_path = bloomberg_news_path
         self.min_date, self.max_date = self._get_dates()
 
     def _get_dates(self) -> Tuple[datetime, datetime]:
+        r_min_date, r_max_date = self._get_reuters_dates()
+        b_min_date, b_max_date = self._get_bloomberg_dates()
+
+        # take intersection
+        min_date = max(r_min_date, b_min_date)
+        max_date = min(r_max_date, b_max_date)
+
+        return min_date, max_date
+
+    def _get_reuters_dates(self) -> Tuple[datetime, datetime]:
+        """get min and max dates of reuters news article
+
+        Returns:
+            Tuple[datetime, datetime]: min and max of news dates
+        """
+        subdirs = os.listdir(self.reuters_news_path)
+        dates = [datetime.strptime(d, '%Y%m%d') for d in subdirs if d[0].isdigit()]
+
+        return min(dates), max(dates)
+
+    def _get_bloomberg_dates(self) -> Tuple[datetime, datetime]:
         """get min and max dates of news article
 
         Returns:
             Tuple[datetime, datetime]: min and max of news dates
         """
-        subdirs = os.listdir(self.news_path)
-        dates = [datetime.strptime(d, '%Y%m%d') for d in subdirs if d[0].isdigit()]
+        subdirs = os.listdir(self.bloomberg_news_path)
+        dates = [datetime.strptime(d, '%Y-%m-%d') for d in subdirs if d[0].isdigit()]
 
         return min(dates), max(dates)
 
@@ -477,7 +503,10 @@ class ModelDataPrep:
 
 
 if __name__ == '__main__':
-    dm = DateManager(news_path='/home/timnaka123/Documents/financial-news-dataset/ReutersNews106521')
+    dm = DateManager(
+        reuters_news_path='/home/timnaka123/Documents/financial-news-dataset/ReutersNews106521',
+        bloomberg_news_path='/home/timnaka123/Documents/financial-news-dataset/bloomberg'
+        )
     t_start_date, v_start_date, v_end_date = dm.get_model_date(2, 1)
 
     mdp = ModelDataPrep(
