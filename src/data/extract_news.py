@@ -26,6 +26,8 @@ def process_punc(text: str, rm_punc: bool) -> str:
         text = re.sub(punc_pattern, r' \1 ', text)
         # at most one space
         text = re.sub(r' +', ' ', text)
+        # at most one \n and remove white space after \n
+        text = re.sub(r'(\n\s*)+', '\n', text)
 
     return text
 
@@ -41,7 +43,7 @@ def break_sentence(text: str) -> str:
     """
     # looks for periods, question marks or exclamation marks
     # followed by a space and a capital letter
-    sentences = re.split(r'(?<=[^A-Z].[.?!]) +(?=[A-Z])', text)
+    sentences = re.split(r'(?<=[^A-Z]{1}[.?!]) +(?=[A-Z])', text)
 
     return"\n".join(sentences)
 
@@ -79,21 +81,20 @@ def reuters_single_file_process(
 
     try:
         # remove Reuters and location
-        lines[1] = re.sub(r'^.*\(Reuters\)', '', lines[1])
+        lines[1] = re.sub(r'^.*\(Reuters\)\s+-\s+', '', lines[1])
     except Exception:
         pass
 
-    # fetch ticker mentioned, ( AAPL.N ) -> AAPL
+    # fetch ticker mentioned, ( AAPL.N ) -> AAPL, ( BRKa.N ) -> BRKa
     news_text = ' '.join(lines)
-    matched = set(re.findall(r"\s[A-Z]+\.[N|O|OQ]\s", news_text))
+    matched = set(re.findall(r"\s[A-Z]+[a-z]?\.[N|O|OQ]\s", news_text))
 
     if len(matched) > 0:
-        matched = [re.sub(r'\.[N|O|OQ]| ', '', e) for e in matched]
+        matched = [re.sub(r'\.[N|O|OQ]| ', '', e).upper() for e in matched]
         # normalize ticker
-        # (\w+): apturing group with one or more letters
-        pattern = r"(\s?\(\s([A-Z]+)\.[N|O|OQ]\s\)\s?)"
+        pattern = r"(\s?\(\s([A-Z]+[a-z]?)\.[N|O|OQ]\s\)\s?)"
         # backreference \2 to replace the matched pattern with the contents of the second capturing group.
-        news_text = re.sub(pattern, r' \2 ', news_text)
+        news_text = re.sub(pattern, lambda x: ' ' + x.group(2).upper() + ' ', news_text)
     else:
         matched = []
 
@@ -123,11 +124,18 @@ def bloomberg_single_file_process(
         print(f'fail to load file: {path}')
         return [], ''
 
-    # remove text after --
-    for i in range(len(lines)):
+    # remove empty first line if no content
+    if lines[0].strip() == '--':
+        del lines[0]
+
+    # remove -- in headline
+    lines[0] = re.sub('^ *-- *', '', lines[0])
+
+    for i in range(1, len(lines)):
         lines[i] = '' if lines[i][:2] == '--' else lines[i]
 
     news_text = ' '.join(lines)
+    # remove -- from headline
     # remove timestamp
     news_text = re.sub(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z', '', news_text)
     # remove random \n
