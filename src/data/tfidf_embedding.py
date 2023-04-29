@@ -7,9 +7,6 @@ import numpy as np
 from scipy.sparse import csr_matrix
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-from src.data.bert_embedding import (embedding_batch_preprocessing,
-                                     single_file_process)
-from src.data.explore import get_path, pickle_results
 from src.data.utils import STOPWORDS
 
 bin_file='/home/timnaka123/Documents/stock_embedding_nlp/src/data/news.bin'
@@ -52,6 +49,7 @@ def tfidf_weighted_embedding(
     news_id: List[str],
     ncores: Optional[int] = None,
     batch_size: int = 500,
+    debug: bool = False
     ) -> List[str]:
     nrows = x.shape[0]
     npart = -(-nrows // batch_size)
@@ -59,14 +57,22 @@ def tfidf_weighted_embedding(
                  for i in range(npart)]
     ncores = ncores if ncores is not None else mp.cpu_count()
 
-    with mp.Pool(processes=ncores) as p:
-        out = p.starmap(_tfidf_weighted_embedding, input_lst)
+    if debug:
+        out = []
+        for i in input_lst:
+            out.append(_tfidf_weighted_embedding(*i))
+    else:
+        with mp.Pool(processes=ncores) as p:
+            out = p.starmap(_tfidf_weighted_embedding, input_lst)
 
     # reduce(lambda d1, d2: dict(d1, **d2), out)
     return reduce(lambda d1, d2: dict(d1, **d2), out)
 
 
 if __name__ == '__main__':
+    from src.data.bert_embedding import embedding_batch_preprocessing
+    from src.data.explore import get_path
+
     all_paths = get_path(
         dir_path='/home/timnaka123/Documents/financial-news-dataset/ReutersNews106521'
         )[: 1000]
@@ -76,7 +82,7 @@ if __name__ == '__main__':
     corpus = [e[2] for e in input_data if e[2] is not None]
     news_id = [e[1] for e in input_data if e[2] is not None]
 
-    vectorizer = TfidfVectorizer(min_df=0.05, stop_words=STOPWORDS, dtype=np.float32)
+    vectorizer = TfidfVectorizer(min_df=0.01, stop_words=STOPWORDS, dtype=np.float32)
 
     X = vectorizer.fit_transform(corpus)
 
@@ -84,7 +90,8 @@ if __name__ == '__main__':
         x=X,
         trained_vecterizer=vectorizer,
         news_id=news_id,
-        batch_size=100
+        batch_size=100,
+        debug=True
         )
 
     from scipy.sparse import csr_matrix
