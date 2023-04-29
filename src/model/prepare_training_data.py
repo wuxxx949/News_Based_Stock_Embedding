@@ -386,8 +386,7 @@ class ModelDataPrep:
     def _create_dataset(
         label_df: pd.DataFrame,
         embedding_lookup: Dict[str, List[np.array]],
-        batch_size: int = 32,
-        seed_value: int = 42
+        batch_size: int = 32
         ) -> PaddedBatchDataset:
         """create training and validation dataset for tf model
 
@@ -411,13 +410,13 @@ class ModelDataPrep:
                 if se is not None:
                     yield (se, te, t), l
 
+        # .shuffle(buffer_size=1000, seed=seed_value)
         dataset = tf.data.Dataset \
             .from_generator(
                 generator,
                 output_types=((tf.float32, tf.float32, tf.string), tf.int8),
                 output_shapes=(((5, None, 384), (5, None, 64), ()), ())
                 ) \
-            .shuffle(buffer_size=1000, seed=seed_value) \
             .padded_batch(
                 batch_size,
                 padded_shapes=(((5, None, 384), (5, None, 64), ()), ())
@@ -425,7 +424,7 @@ class ModelDataPrep:
 
         return dataset
 
-    def random_split_data(self) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    def random_split_data(self, seed: int) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """randomly split dates
 
         Returns:
@@ -446,6 +445,7 @@ class ModelDataPrep:
 
         train_target_mask = target_df.index.isin(train_dates)
         # randomize training order
+        np.random.seed(seed)
         train_target = target_df.loc[train_target_mask, :].sample(frac = 1)
         valid_target = target_df.loc[~train_target_mask, :]
         logger.info(f'training target len: {len(train_target)}')
@@ -457,7 +457,8 @@ class ModelDataPrep:
         self,
         split_method: str,
         days_lookback: int = 5,
-        batch_size: int = 32
+        batch_size: int = 32,
+        seed_value: int = 42
         ) -> Tuple[PaddedBatchDataset, PaddedBatchDataset]:
         """create modeling dataset
 
@@ -497,7 +498,7 @@ class ModelDataPrep:
                 batch_size=batch_size
                 )
         elif split_method == 'random':
-            train_target_random, valid_target_random = self.random_split_data()
+            train_target_random, valid_target_random = self.random_split_data(seed=seed_value)
             embedding_lookup = self._fetch_embeddings(
                 trading_dates=self.trading_date,
                 news_dates=self.news_date,
