@@ -130,7 +130,7 @@ class ModelDataPrep:
 
     def _load_bert_embeddings(self):
         bert_embedding = pd.read_parquet(
-            os.path.join(self.save_dir_path, 'pca_embedding_df.parquet.gzip')
+            os.path.join(self.save_dir_path, 'sentence_embedding_df.parquet.gzip')
             )
         # use date as index for time slicing
         self.bert_embedding = bert_embedding.reset_index(level=1, drop=False)
@@ -198,7 +198,7 @@ class ModelDataPrep:
         tfidf_corpus = [e[2] for e in input_data if e[2] is not None]
         tfidf_news_id = [e[1] for e in input_data if e[2] is not None]
 
-        vectorizer = TfidfVectorizer(min_df=0.0005, stop_words=STOPWORDS, dtype=np.float32)
+        vectorizer = TfidfVectorizer(min_df=0.0001, stop_words=STOPWORDS, dtype=np.float32)
         vectorizer.fit(tfidf_corpus)
 
         if (start_date == tfidf_start_date) and (end_date == tfidf_end_date):
@@ -402,11 +402,11 @@ class ModelDataPrep:
             .from_generator(
                 generator,
                 output_types=((tf.float32, tf.float32, tf.string), tf.int8),
-                output_shapes=(((5, None, 256), (5, None, 64), ()), ())
+                output_shapes=(((5, None, 384), (5, None, 64), ()), ())
                 ) \
             .padded_batch(
                 batch_size,
-                padded_shapes=(((5, None, 256), (5, None, 64), ()), ())
+                padded_shapes=(((5, None, 384), (5, None, 64), ()), ())
                 )
 
         return dataset
