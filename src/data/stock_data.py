@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 
+from src.data.sp500 import hist_sp500
 from src.data.utils import get_path, load_pickled_obj
 
 
@@ -30,19 +31,21 @@ def get_news_date_range(data_dir_path: str) -> Tuple[str, str]:
     return date_formatter(min_date), date_formatter(max_date)
 
 # TODO: to utils
-def get_tickers(dir_path: str, obj_name: str, min_count: int) -> List[str]:
+def get_tickers(dir_path: str, obj_name: str) -> List[str]:
     """fetch pickled tickers that mentioned enough times in the news
 
     Args:
         dir_path (str): pickle obj dir path
         obj_name (str): pickle obj name
-        min_count (int): min number of mentioning
 
     Returns:
         List[str]: tickers of interest
     """
     ticker_freq = load_pickled_obj(dir_path, obj_name)
-    qualified = {k: v for k, v in ticker_freq.items() if v >= min_count}
+    # qualified = {k: v for k, v in ticker_freq.items() if v >= min_count}
+    ticker_freq = dict(sorted(ticker_freq.items(), key=lambda item: item[1], reverse=True))
+    tickers = hist_sp500['2013/01/31']
+    qualified =  {k: v for k, v in ticker_freq.items() if k in tickers}
 
     return list(qualified.keys())
 
@@ -54,10 +57,23 @@ def sleep_time(loc: float, scale: float):
 
     return out
 
-def fetch_daily_price(tickers: List[str],
-                      start: str,
-                      end: str,
-                      batch_size: int=20) -> pd.DataFrame:
+def fetch_daily_price(
+    tickers: List[str],
+    start: str,
+    end: str,
+    batch_size: int=20
+    ) -> pd.DataFrame:
+    """fetch daily price for target tickers
+
+    Args:
+        tickers (List[str]): target tickers
+        start (str): start date
+        end (str): end date_
+        batch_size (int, optional): batch size for yf. Defaults to 20.
+
+    Returns:
+        pd.DataFrame: stock data
+    """
     if len(tickers) % batch_size == 1:
         batch_size += 1
 
@@ -130,14 +146,15 @@ def main(
     news_dir_path: str,
     processed_data_dir_path: str,
     ticker_obj_name: str,
-    min_count: int,
+    nstock: int,
     ) -> pd.DataFrame:
     """generate training target
 
     Args:
-        news_dir_path (str): _description_
+        news_dir_path (str): news directory
         processed_data_dir_path (str): _description_
         ticker_obj_name (str): _description_
+        nstock (int): number of stocks to fetch
 
     Returns:
         pd.DataFrame: _description_
@@ -147,8 +164,7 @@ def main(
     tickers = get_tickers(
         dir_path=processed_data_dir_path,
         obj_name=ticker_obj_name,
-        min_count=min_count
-        )
+        )[: nstock]
 
     raw_daily_price = fetch_daily_price(
         tickers=tickers,
@@ -172,6 +188,6 @@ if __name__ == '__main__':
         news_dir_path= '/home/timnaka123/Documents/financial-news-dataset/ReutersNews106521',
         processed_data_dir_path='/home/timnaka123/Documents/stock_embedding_nlp/src/data/',
         ticker_obj_name='qualified_tickers.pickle',
-        min_count=150
+        nstock=60
         )
 
