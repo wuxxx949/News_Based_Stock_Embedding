@@ -9,6 +9,9 @@ import yfinance as yf
 
 from src.data.sp500 import hist_sp500
 from src.data.utils import get_path, load_pickled_obj
+from src.logger import setup_logger
+
+logger = setup_logger('data', 'data.log')
 
 
 def date_formatter(date: str) -> str:
@@ -138,6 +141,13 @@ def create_target(
         .query('target >= 0') \
         .loc[:, ['date', 'ticker', 'target']] \
         .reset_index(drop=True)
+
+    # logging
+    ticker_cnt = len(output_df['ticker'].unique())
+    min_date = output_df['date'].min()
+    max_date = output_df['date'].max()
+    logger.info(f'{ticker_cnt} tickers')
+    logger.info(f'{len(output_df)} return data from {min_date} to {max_date}')
 
     return output_df
 
