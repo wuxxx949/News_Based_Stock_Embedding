@@ -8,12 +8,16 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 from sklearn.feature_extraction.text import TfidfVectorizer
+from tensorflow.python.data.ops.dataset_ops import PaddedBatchDataset
 
 from src.data.bert_embedding import embedding_batch_preprocessing
 from src.data.explore import get_path
 from src.data.tfidf_embedding import tfidf_weighted_embedding
 from src.data.utils import STOPWORDS
+from src.logger import setup_logger
 from src.model.utils import extract_date, lazyproperty, to_date
+
+logger = setup_logger('data', 'data.log')
 
 
 class DateManager:
@@ -39,6 +43,7 @@ class DateManager:
         # take intersection
         min_date = max(r_min_date, b_min_date)
         max_date = min(r_max_date, b_max_date)
+        logger.info(f'news data range: {min_date} to {max_date}')
 
         return min_date, max_date
 
@@ -338,14 +343,14 @@ class ModelDataPrep:
         trading_dates: Iterable[datetime],
         news_dates: Iterable[datetime],
         embedding_df: pd.DataFrame,
-        days_lookback: int = 5,
+        days_lookback: int = 5
         ) -> Dict[str, List[np.array]]:
         """prepare embedding vectors within the range of days for a given trading date
 
         Args:
             trading_dates (Iterable[datetime]): a set of trading dates
             news_dates (Iterable[datetime]): a set of news dates
-            embedding_df (pd.DataFrame): bert and tfidf embedding dataframe
+            embedding_df (pd.DataFrame): sentence embedding and tfidf embedding dataframe
             days_lookback (int, optional): number of days to look back for news. Defaults to 5.
 
         Returns:
@@ -360,17 +365,17 @@ class ModelDataPrep:
             min_date = str(min(nd))
             max_date = str(max(nd))
             tmp_df = embedding_df[min_date: max_date]
-            bert_embedding = tmp_df.filter(regex='^c', axis=1).groupby('date')
+            sentence_embedding = tmp_df.filter(regex='^c', axis=1).groupby('date')
             tfidf_embedding = tmp_df.filter(regex='^f', axis=1).groupby('date')
             tmp_bert = []
-            bert_max_news = max([len(e) for e in dict(list(bert_embedding)).values()])
-            for _, d in bert_embedding:
+            sentence_max_news = max([len(e) for e in dict(list(sentence_embedding)).values()])
+            for _, d in sentence_embedding:
                 # need to pad to the longest number of news in the neighboring days
-                d = d.reset_index(drop=True).reindex(range(bert_max_news), fill_value=0)
+                d = d.reset_index(drop=True).reindex(range(sentence_max_news), fill_value=0)
                 tmp_bert.append(d.to_numpy().tolist())
             tmp_tfidf = []
             for _, d in tfidf_embedding:
-                d = d.reset_index(drop=True).reindex(range(bert_max_news), fill_value=0)
+                d = d.reset_index(drop=True).reindex(range(sentence_max_news), fill_value=0)
                 tmp_tfidf.append(d.to_numpy().tolist())
 
             out[str(td)] = [np.array(tmp_bert), np.array(tmp_tfidf)]
@@ -380,23 +385,31 @@ class ModelDataPrep:
     @staticmethod
     def _create_dataset(
         label_df: pd.DataFrame,
-        embedding_lookup: Dict[str, np.array],
-        batch_size: int = 32
-        ):
+        embedding_lookup: Dict[str, List[np.array]],
+        batch_size: int = 32,
+        seed_value: int = 42
+        ) -> PaddedBatchDataset:
+        """create training and validation dataset for tf model
+
+        Args:
+            label_df (pd.DataFrame): stock price change label
+            embedding_lookup (Dict[str, List[np.array, np.array]): date as key, sentence and tfidf pair as value
+            batch_size (int, optional): batch size. Defaults to 32.
+            seed_value (int, optional): seed for dataset shuffling. Defaults to 42.
+
+        Returns:
+            PaddedBatchDataset: dataset
+        """
         label = label_df['target'].to_numpy()
         ticker = label_df['ticker'].to_numpy()
         dates = [str(e.date()) for e in label_df.index.to_pydatetime()]
-        bert_embeddings = [embedding_lookup.get(e, [None, None])[0] for e in dates]
+        sentence_embeddings = [embedding_lookup.get(e, [None, None])[0] for e in dates]
         tfidf_embeddings = [embedding_lookup.get(e, [None, None])[1] for e in dates]
 
         def generator():
-            # np.random.default_rng(seed).shuffle(bert_embeddings)
-            # np.random.default_rng(seed).shuffle(tfidf_embeddings)
-            # np.random.default_rng(seed).shuffle(ticker)
-            # np.random.default_rng(seed).shuffle(label)
-            for be, te, t, l in zip(bert_embeddings, tfidf_embeddings, ticker, label):
-                if be is not None:
-                    yield (be, te, t), l
+            for se, te, t, l in zip(sentence_embeddings, tfidf_embeddings, ticker, label):
+                if se is not None:
+                    yield (se, te, t), l
 
         dataset = tf.data.Dataset \
             .from_generator(
@@ -404,6 +417,7 @@ class ModelDataPrep:
                 output_types=((tf.float32, tf.float32, tf.string), tf.int8),
                 output_shapes=(((5, None, 384), (5, None, 64), ()), ())
                 ) \
+            .shuffle(buffer_size=1000, seed=seed_value) \
             .padded_batch(
                 batch_size,
                 padded_shapes=(((5, None, 384), (5, None, 64), ()), ())
@@ -434,6 +448,8 @@ class ModelDataPrep:
         # randomize training order
         train_target = target_df.loc[train_target_mask, :].sample(frac = 1)
         valid_target = target_df.loc[~train_target_mask, :]
+        logger.info(f'training target len: {len(train_target)}')
+        logger.info(f'validation target len: {len(valid_target)}')
 
         return train_target, valid_target
 
@@ -441,7 +457,8 @@ class ModelDataPrep:
         self,
         split_method: str,
         days_lookback: int = 5,
-        batch_size: int = 32):
+        batch_size: int = 32
+        ) -> Tuple[PaddedBatchDataset, PaddedBatchDataset]:
         """create modeling dataset
 
         Args:
@@ -451,7 +468,7 @@ class ModelDataPrep:
             seed (int, optional): _description_. Defaults to 42.
 
         Returns:
-            _type_: _description_
+            Tuple[PaddedBatchDataset, PaddedBatchDataset]: training and validation dataset
         """
         train_df, train_target, valid_df, valid_target = self.prep_raw_model_data()
         if split_method == 'time':
@@ -466,7 +483,7 @@ class ModelDataPrep:
                 label_df=train_target,
                 embedding_lookup=training_embedding_lookup,
                 batch_size=batch_size
-            )
+                )
             # validation dataset
             validation_embedding_lookup = self._fetch_embeddings(
                 trading_dates=self.validation_trading_date,
@@ -478,7 +495,7 @@ class ModelDataPrep:
                 label_df=valid_target,
                 embedding_lookup=validation_embedding_lookup,
                 batch_size=batch_size
-            )
+                )
         elif split_method == 'random':
             train_target_random, valid_target_random = self.random_split_data()
             embedding_lookup = self._fetch_embeddings(
@@ -486,18 +503,17 @@ class ModelDataPrep:
                 news_dates=self.news_date,
                 embedding_df=pd.concat([train_df, valid_df]),
                 days_lookback=days_lookback
-            )
+                )
             training_dataset = self._create_dataset(
                 label_df=train_target_random,
                 embedding_lookup=embedding_lookup,
                 batch_size=batch_size
-            )
+                )
             validation_dataset = self._create_dataset(
                 label_df=valid_target_random,
                 embedding_lookup=embedding_lookup,
                 batch_size=batch_size
-            )
-
+                )
 
         return training_dataset, validation_dataset
 
