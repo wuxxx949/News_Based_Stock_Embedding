@@ -3,8 +3,6 @@ import re
 from string import punctuation
 from typing import List, Tuple
 
-from src.data.sp500 import hist_sp500
-
 
 punc_pattern = '([' + ''.join(punctuation) + '])'
 
@@ -87,6 +85,9 @@ def reuters_single_file_process(
 
     # fetch ticker mentioned, ( AAPL.N ) -> AAPL, ( BRKa.N ) -> BRKa
     news_text = ' '.join(lines)
+    # remove random \n
+    news_text = re.sub('\n', '', news_text)
+
     matched = set(re.findall(r"\s[A-Z]+[a-z]?\.[N|O|OQ]\s", news_text))
 
     if len(matched) > 0:
@@ -188,6 +189,7 @@ if __name__ == '__main__':
     file = 'us-aig-idUSTRE62E0GQ20100315'
     folder = '/home/timnaka123/Documents/financial-news-dataset/ReutersNews106521/20100315'
     path = sample_news('/home/timnaka123/Documents/financial-news-dataset/ReutersNews106521/')
+    # path = '/home/timnaka123/Documents/financial-news-dataset/ReutersNews106521/20111213/us-markets-stocks-idUSTRE7AO0B420111213'
     # path = os.path.join(folder, file)
     out = reuters_single_file_process(path, False)
     print(get_raw_news(path))
