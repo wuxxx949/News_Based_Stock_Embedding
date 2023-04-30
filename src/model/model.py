@@ -1,4 +1,7 @@
 import tensorflow as tf
+from tensorflow.keras.callbacks import EarlyStopping
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.optimizers.schedules import CosineDecay
 
 from src.data.stock_data import get_tickers
 from src.logger import setup_logger
@@ -68,15 +71,23 @@ h = ts_layer(market_embeddings)
 # MLP for prediction
 output_layer = tf.keras.layers.Dense(1, activation="sigmoid")
 Y_proba = output_layer(h)
+
 model = tf.keras.Model(
     inputs=[context_embedding, word_embedding, ticker_inputs],
     outputs=[Y_proba]
     )
 
+# Adam optimizer with cosine annealing
+initial_learning_rate = 0.002
+lr_schedule = CosineDecay(initial_learning_rate, 2000)
+optimizer = Adam(learning_rate=lr_schedule)
+early_stop = EarlyStopping(monitor='val_loss', patience=1)
+
 model.compile(
-    loss="binary_crossentropy",
-    optimizer="nadam",
-    metrics=["accuracy"]
+    loss='binary_crossentropy',
+    # optimizer="nadam",
+    optimizer=optimizer,
+    metrics=['accuracy']
     )
 
 
@@ -88,7 +99,7 @@ if __name__ == '__main__':
         bloomberg_news_path='/home/timnaka123/Documents/financial-news-dataset/bloomberg'
         )
 
-    t_start_date, v_start_date, v_end_date = dm.get_model_date(training_len=3, validation_len=1)
+    t_start_date, v_start_date, v_end_date = dm.get_model_date(training_len=5, validation_len=2)
 
     mdp = ModelDataPrep(
         reuters_news_path='/home/timnaka123/Documents/financial-news-dataset/ReutersNews106521',
@@ -99,8 +110,13 @@ if __name__ == '__main__':
         validation_end_date=v_end_date
     )
 
-    training_ds, validation_ds = mdp.create_dataset(split_method='random')
-    hisotry = model.fit(training_ds, validation_data=validation_ds, epochs=10)
+    training_ds, validation_ds = mdp.create_dataset(split_method='random', seed_value=88)
+    hisotry = model.fit(
+        training_ds,
+        validation_data=validation_ds,
+        epochs=10,
+        callbacks=[early_stop]
+        )
 
     # log model history
     logger.info(f"training loss: {hisotry.history['loss']}")
