@@ -93,7 +93,7 @@ early_stop = EarlyStopping(monitor='val_accuracy', patience=2)
 
 model.compile(
     loss='binary_crossentropy',
-    optimizer=tf.keras.optimizers.Nadam(learning_rate=0.0002),
+    optimizer=tf.keras.optimizers.Nadam(learning_rate=0.001),
     # optimizer=optimizer,
     metrics=['accuracy']
     )
@@ -107,18 +107,17 @@ if __name__ == '__main__':
         bloomberg_news_path='/home/timnaka123/Documents/financial-news-dataset/bloomberg'
         )
 
-    t_start_date, v_start_date, v_end_date = dm.get_model_date(training_len=5, validation_len=2)
+    start_date, end_date = dm.get_random_split_date(data_len=7)
 
     mdp = ModelDataPrep(
         reuters_news_path='/home/timnaka123/Documents/financial-news-dataset/ReutersNews106521',
         bloomberg_news_path='/home/timnaka123/Documents/financial-news-dataset/bloomberg',
         save_dir_path='/home/timnaka123/Documents/stock_embedding_nlp/src/data',
-        training_start_date=t_start_date,
-        validation_start_date=v_start_date,
-        validation_end_date=v_end_date
+        min_date=start_date,
+        max_date=end_date
     )
 
-    training_ds, validation_ds = mdp.create_dataset(split_method='random', seed_value=60)
+    training_ds, validation_ds = mdp.create_dataset(seed_value=41)
     hisotry = model.fit(
         training_ds,
         validation_data=validation_ds,
