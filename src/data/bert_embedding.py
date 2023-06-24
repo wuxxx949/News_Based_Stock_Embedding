@@ -6,9 +6,7 @@ from typing import List, Optional, Tuple
 import numpy as np
 import pandas as pd
 from sklearn import decomposition
-from transformers import BertTokenizer, TFBertModel
 
-from src.data.sp500 import hist_sp500
 from src.data.utils import (create_uuid_from_string, get_path,
                             headline_processing, longest_line, pickle_results)
 
@@ -77,7 +75,6 @@ def embedding_batch_preprocessing(
 
     Args:
         pathes (List[str]): pathes in the batch
-        tickers (List[str]): all tickers of interest
         ncores (Optional[int], optional): number of workers for mp. Defaults to None.
 
     Returns:
@@ -126,7 +123,7 @@ def bert_embedding(
 
 
 def generate_embedding(
-    all_pathes: List[str],
+    all_paths: List[str],
     tokenizer,
     model,
     save_dir_path: str,
@@ -146,7 +143,7 @@ def generate_embedding(
         Tuple[np.ndarray, List[str], List[str]]: news embedding, date, and news id
     """
     results = []
-    text_input = embedding_batch_preprocessing(all_pathes)
+    text_input = embedding_batch_preprocessing(all_paths)
 
     nparts = -(-len(text_input) // batch_size)
 
@@ -201,7 +198,8 @@ def bert_compression(
 
 
 if __name__ == '__main__':
-    tickers = hist_sp500['2013/01/31']
+    from transformers import BertTokenizer, TFBertModel
+
     rdir = '/home/timnaka123/Documents/financial-news-dataset/ReutersNews106521'
     bdir = '/home/timnaka123/Documents/financial-news-dataset/bloomberg'
     headline_path = '/home/timnaka123/Documents/stock_embedding_nlp/src/data/headlines.txt'
