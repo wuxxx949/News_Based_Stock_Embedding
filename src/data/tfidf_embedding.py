@@ -19,26 +19,30 @@ def _tfidf_weighted_embedding(
     news_id: List[str],
     vectorizer
     ):
+    """note that some news may have all 0 in the sparse matrix depends on min_df input
+    """
     nzero = x.nonzero()
     nonzero_idx = list(zip(nzero[0], nzero[1]))
     # i = 0
     i = nonzero_idx[0][0]
     results = {}
-
+    tmp_tfidf_wt = []
     tmp_embedding = 0
-    for c in list(nonzero_idx):
-        if c[0] > i:
-            results[news_id[i]] = tmp_embedding
-            # i += 1
-            i = c[0]
+    for idx in nonzero_idx:
+        if idx[0] > i:
+            results[news_id[i]] = tmp_embedding / sum(tmp_tfidf_wt)
+            # reset
+            i = idx[0]
+            tmp_tfidf_wt = []
             tmp_embedding = 0
 
-        w = vectorizer.get_feature_names_out()[c[1]]
-        tfidf = x[c]
+        w = vectorizer.get_feature_names_out()[idx[1]]
+        tfidf = x[idx]
+        tmp_tfidf_wt.append(tfidf)
         tmp_embedding += tfidf * model.get_word_vector(w)
 
-    # attach last row
-    results[news_id[i]] = tmp_embedding
+    # attach the last row
+    results[news_id[i]] = tmp_embedding / sum(tmp_tfidf_wt)
 
     return results
 

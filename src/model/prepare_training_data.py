@@ -2,7 +2,7 @@ import datetime as dt
 import os
 from datetime import datetime
 from itertools import chain
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Dict, Iterable, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -69,12 +69,12 @@ class DateManager:
 
         return min(dates), max(dates)
 
-    def get_model_date(
+    def get_ts_model_date(
         self,
         training_len: int,
         validation_len: int
         ) -> Tuple[datetime, datetime, datetime]:
-        """configure model dates
+        """configure model dates if use time series for training / validation partition
 
         Args:
             training_len (int): number of years for training
@@ -96,6 +96,22 @@ class DateManager:
 
         return self.min_date, validation_start, validation_end
 
+    def get_random_split_date(self, data_len: int) -> Tuple[datetime, datetime]:
+        """configure news date range for given data length in year
+
+        Args:
+            data_len (int): number of years used for training and validation
+
+        Returns:
+            Tuple[datetime, datetime]: start and end date
+        """
+        max_date = self.min_date.replace(year=self.min_date.year + data_len)
+        if max_date >= self.max_date:
+            logger.warn('max date exceeds last day of news data')
+            max_date = self.max_date
+
+        return self.min_date, max_date
+
 
 class ModelDataPrep:
     def __init__(
@@ -103,29 +119,37 @@ class ModelDataPrep:
         reuters_news_path: str,
         bloomberg_news_path: str,
         save_dir_path: str,
-        training_start_date: datetime,
-        validation_start_date: datetime,
-        validation_end_date: datetime
+        min_date: datetime,
+        max_date: datetime,
+        min_df: float = 0.0001
         ) -> None:
-        """
+        """Constructor
+
         Args:
             reuters_news_path (str): path to reuters news directory
             bloomberg_news_path (str): path to bloomberg news directory
             save_dir_path (str): path to news directory
-            training_start_date (datetime): training start date, inclusive
-            validation_start_date (datetime): validation start date, inclusive
-            validation_end_date (datetime): validation end date, non-inclusive
+            min_date (datetime): min news date, inclusive
+            max_date (datetime): max news date, inclusive
+            min_dfend_date (float, optional): min_df arg for TfidfVectorizer. Defaults to 0.0001.
         """
         self.reuters_news_path = reuters_news_path
         self.bloomberg_news_path = bloomberg_news_path
         self.save_dir_path = save_dir_path
-        self.training_start_date = training_start_date
-        self.validation_start_date = validation_start_date
-        self.validation_end_date = validation_end_date
+        self.min_date = min_date
+        self.max_date = max_date
+        self.min_df = min_df
         self.target = pd.DataFrame()
         self.bert_embedding = pd.DataFrame()
         self._load_bert_embeddings()
         self._load_target()
+        # for storing processed tfidf embedding
+        self.date_str = f'{str(min_date.date())}_{str(max_date.date())}'
+        self.tfidf_embedding_dir = os.path.join(
+            os.path.dirname(os.path.realpath(__file__)), 'tfidf'
+            )
+        if not os.path.exists(self.tfidf_embedding_dir):
+            os.makedirs(self.tfidf_embedding_dir)
 
     def _load_target(self):
         target = pd.read_parquet(
@@ -176,10 +200,8 @@ class ModelDataPrep:
 
     def _get_tfidf_vector(
         self,
-        tfidf_start_date: datetime,
-        tfidf_end_date: datetime,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None,
+        start_date: datetime,
+        end_date: datetime
         ) -> pd.DataFrame:
         """calculate tfidf embedding for given date inputs
 
@@ -187,64 +209,52 @@ class ModelDataPrep:
             tfidf_start_date (datetime): news start date for known date range
             tfidf_end_date (datetime): news end date for known date range
             start_date (Optional[datetime], optional): start date for output. Defaults to None.
-            end_date (Optional[datetime], optional): end date for output. Defaults to None.
+            end_date
 
         Returns:
             Dict[str, np.array]: key of news id and value of news tfidf embeddings
         """
-        if start_date is None:
-            start_date = tfidf_start_date
-        if end_date is None:
-            end_date = tfidf_end_date
-
         # training period data
-        tfidf_news_files = self._news_file_filter(tfidf_start_date, tfidf_end_date)
+        tfidf_news_files = self._news_file_filter(
+            min_date=start_date,
+            max_date=end_date
+            )
         input_data = embedding_batch_preprocessing(paths=tfidf_news_files)
         tfidf_corpus = [e[2] for e in input_data if e[2] is not None]
         tfidf_news_id = [e[1] for e in input_data if e[2] is not None]
 
-        vectorizer = TfidfVectorizer(min_df=0.0001, stop_words=STOPWORDS, dtype=np.float32)
-        vectorizer.fit(tfidf_corpus)
+        vectorizer = TfidfVectorizer(
+            min_df=self.min_df,
+            stop_words=STOPWORDS,
+            dtype=np.float32
+            )
+        X = vectorizer.fit_transform(tfidf_corpus)
+        tfidf_df_path = os.path.join(
+            self.tfidf_embedding_dir, f'tfidf_{self.date_str}.parquet.gzip'
+            )
 
-        if (start_date == tfidf_start_date) and (end_date == tfidf_end_date):
-            corpus = tfidf_corpus
-            news_id = tfidf_news_id
-        else:
-            news_files = self._news_file_filter(start_date, end_date)
-            input_data = embedding_batch_preprocessing(paths=news_files)
-            corpus = [e[2] for e in input_data if e[2] is not None]
-            news_id = [e[1] for e in input_data if e[2] is not None]
-
-        X = vectorizer.transform(corpus)
+        # cached processed tfidf df
+        if os.path.exists(tfidf_df_path):
+            return pd.read_parquet(tfidf_df_path)
 
         out = tfidf_weighted_embedding(
             x=X,
             trained_vecterizer=vectorizer,
-            news_id=news_id
+            news_id=tfidf_news_id
             )
+        results = self._tfidf_to_df(out)
+        # save results to file
+        results.to_parquet(tfidf_df_path, compression='gzip')
 
-        return self._tfidf_to_df(out)
+        return results
 
     @lazyproperty
-    def training_tfidf_df(self) -> pd.DataFrame:
-        """tfidf based on training peroid data
+    def tfidf_df(self) -> pd.DataFrame:
+        """tfidf df for selected news dates
         """
         embedding = self._get_tfidf_vector(
-            tfidf_start_date=self.training_start_date,
-            tfidf_end_date=self.validation_start_date
-            )
-
-        return embedding
-
-    @lazyproperty
-    def validation_tfidf_df(self) -> pd.DataFrame:
-        """tfidf embedding based on both training and validation peroid data
-        """
-        embedding = self._get_tfidf_vector(
-            tfidf_start_date=self.training_start_date,
-            tfidf_end_date=self.validation_start_date,
-            start_date=self.validation_start_date,
-            end_date=self.validation_end_date
+            start_date=self.min_date,
+            end_date=self.max_date
             )
 
         return embedding
@@ -256,21 +266,10 @@ class ModelDataPrep:
         return self.bert_embedding[start_date: end_date]
 
     @lazyproperty
-    def training_bert_df(self) -> pd.DataFrame:
-        end_date = self.validation_start_date - dt.timedelta(1)
+    def bert_df(self) -> pd.DataFrame:
         out = self._get_bert_vector(
-            start_date=self.training_start_date,
-            end_date=end_date
-            )
-
-        return out
-
-    @lazyproperty
-    def validation_bert_df(self) -> pd.DataFrame:
-        end_date = self.validation_end_date - dt.timedelta(1)
-        out = self._get_bert_vector(
-            start_date=self.validation_start_date,
-            end_date=end_date
+            start_date=self.min_date,
+            end_date=self.max_date
             )
 
         return out
@@ -282,61 +281,29 @@ class ModelDataPrep:
         return self.target[start_date: end_date]
 
     @lazyproperty
-    def training_target(self) -> pd.DataFrame:
-        end_date = self.validation_start_date - dt.timedelta(1)
+    def target(self) -> pd.DataFrame:
         out = self._get_target(
-            start_date=self.training_start_date,
-            end_date=end_date
-            )
-
-        return out
-
-    @lazyproperty
-    def validation_target(self) -> pd.DataFrame:
-        end_date = self.validation_end_date - dt.timedelta(1)
-        out = self._get_target(
-            start_date=self.validation_start_date,
-            end_date=end_date
+            start_date=self.min_date,
+            end_date=self.max_date
             )
 
         return out
 
     def prep_raw_model_data(self) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-        training_df = self.training_bert_df.reset_index() \
-            .merge(self.training_tfidf_df, on='news_id', how='inner') \
+        embedding_df = self.bert_df.reset_index() \
+            .merge(self.tfidf_df, on='news_id', how='inner') \
             .sort_values('date') \
             .set_index('date')
 
-        validation_df = self.validation_bert_df.reset_index() \
-            .merge(self.validation_tfidf_df, on='news_id', how='inner') \
-            .sort_values('date') \
-            .set_index('date')
-
-        return training_df, self.training_target, validation_df, self.validation_target
-
-    @lazyproperty
-    def training_trading_date(self) -> List[datetime]:
-        return to_date(self.training_target.index.unique().sort_values())
-
-    @lazyproperty
-    def validation_trading_date(self) -> List[datetime]:
-        return to_date(self.validation_target.index.unique().sort_values())
+        return embedding_df, self.target
 
     @lazyproperty
     def trading_date(self) -> List[datetime]:
-        return list(chain(self.training_trading_date, self.validation_trading_date))
-
-    @lazyproperty
-    def training_news_date(self) -> List[datetime]:
-        return to_date(self.training_bert_df.index.unique().sort_values())
-
-    @lazyproperty
-    def validation_news_date(self) -> List[datetime]:
-        return to_date(self.validation_bert_df.index.unique().sort_values())
+        return to_date(self.target.index.unique().sort_values())
 
     @lazyproperty
     def news_date(self):
-        return list(chain(self.training_news_date, self.validation_news_date))
+        return to_date(self.bert_df.index.unique().sort_values())
 
     @staticmethod
     def _fetch_embeddings(
@@ -365,8 +332,8 @@ class ModelDataPrep:
             min_date = str(min(nd))
             max_date = str(max(nd))
             tmp_df = embedding_df[min_date: max_date]
-            sentence_embedding = tmp_df.filter(regex='^c', axis=1).groupby('date')
-            tfidf_embedding = tmp_df.filter(regex='^f', axis=1).groupby('date')
+            sentence_embedding = tmp_df.filter(regex='^c', axis=1).sort_index().groupby('date')
+            tfidf_embedding = tmp_df.filter(regex='^f', axis=1).sort_index().groupby('date')
             tmp_bert = []
             sentence_max_news = max([len(e) for e in dict(list(sentence_embedding)).values()])
             for _, d in sentence_embedding:
@@ -430,13 +397,11 @@ class ModelDataPrep:
         Returns:
             Tuple[pd.DataFrame, pd.DataFrame]: training and validation target df
         """
-        # TODO: need to refactor for random split
-        _, train_target1, _, valid_target1 = self.prep_raw_model_data()
-        # news_df = pd.concat([train_df1, valid_df1])
-        target_df = pd.concat([train_target1, valid_target1])
+        _, target_df = self.prep_raw_model_data()
         # all trading date
         all_trading_dates = target_df.index.unique().to_list()
         # sample training trading dates
+        np.random.seed(seed)
         train_dates = np.random.choice(
             all_trading_dates,
             size=int(0.8 * len(all_trading_dates)),
@@ -444,8 +409,6 @@ class ModelDataPrep:
             )
 
         train_target_mask = target_df.index.isin(train_dates)
-        # randomize training order
-        np.random.seed(seed)
         train_target = target_df.loc[train_target_mask, :].sample(frac = 1)
         valid_target = target_df.loc[~train_target_mask, :]
         logger.info(f'training target len: {len(train_target)}')
@@ -455,7 +418,6 @@ class ModelDataPrep:
 
     def create_dataset(
         self,
-        split_method: str,
         days_lookback: int = 5,
         batch_size: int = 32,
         seed_value: int = 42
@@ -471,50 +433,25 @@ class ModelDataPrep:
         Returns:
             Tuple[PaddedBatchDataset, PaddedBatchDataset]: training and validation dataset
         """
-        train_df, train_target, valid_df, valid_target = self.prep_raw_model_data()
-        if split_method == 'time':
-            # training dataset
-            training_embedding_lookup = self._fetch_embeddings(
-                trading_dates=self.training_trading_date,
-                news_dates=self.training_news_date,
-                embedding_df=train_df,
-                days_lookback=days_lookback
-                )
-            training_dataset = self._create_dataset(
-                label_df=train_target,
-                embedding_lookup=training_embedding_lookup,
-                batch_size=batch_size
-                )
-            # validation dataset
-            validation_embedding_lookup = self._fetch_embeddings(
-                trading_dates=self.validation_trading_date,
-                news_dates=self.validation_news_date,
-                embedding_df=valid_df,
-                days_lookback=days_lookback
-                )
-            validation_dataset = self._create_dataset(
-                label_df=valid_target,
-                embedding_lookup=validation_embedding_lookup,
-                batch_size=batch_size
-                )
-        elif split_method == 'random':
-            train_target_random, valid_target_random = self.random_split_data(seed=seed_value)
-            embedding_lookup = self._fetch_embeddings(
-                trading_dates=self.trading_date,
-                news_dates=self.news_date,
-                embedding_df=pd.concat([train_df, valid_df]),
-                days_lookback=days_lookback
-                )
-            training_dataset = self._create_dataset(
-                label_df=train_target_random,
-                embedding_lookup=embedding_lookup,
-                batch_size=batch_size
-                )
-            validation_dataset = self._create_dataset(
-                label_df=valid_target_random,
-                embedding_lookup=embedding_lookup,
-                batch_size=batch_size
-                )
+        embedding_df, _ = self.prep_raw_model_data()
+
+        train_target_random, valid_target_random = self.random_split_data(seed=seed_value)
+        embedding_lookup = self._fetch_embeddings(
+            trading_dates=self.trading_date,
+            news_dates=self.news_date,
+            embedding_df=embedding_df,
+            days_lookback=days_lookback
+            )
+        training_dataset = self._create_dataset(
+            label_df=train_target_random,
+            embedding_lookup=embedding_lookup,
+            batch_size=batch_size
+            )
+        validation_dataset = self._create_dataset(
+            label_df=valid_target_random,
+            embedding_lookup=embedding_lookup,
+            batch_size=batch_size
+            )
 
         return training_dataset, validation_dataset
 
