@@ -8,7 +8,8 @@ import pandas as pd
 import yfinance as yf
 
 from src.data.sp500 import hist_sp500
-from src.data.utils import get_path, load_pickled_obj
+from src.data.utils import (get_nearest_trading_date, get_path,
+                            load_pickled_obj, sleep_time)
 from src.logger import setup_logger
 
 logger = setup_logger('data', 'data.log')
@@ -52,13 +53,6 @@ def get_tickers(dir_path: str, obj_name: str) -> List[str]:
 
     return list(qualified.keys())
 
-# TODO: to utils
-def sleep_time(loc: float, scale: float):
-    out = 0
-    while out <= 1:
-        out = np.random.normal(loc, scale)
-
-    return out
 
 def fetch_daily_price(
     tickers: List[str],
@@ -150,6 +144,45 @@ def create_target(
     logger.info(f'{len(output_df)} return data from {min_date} to {max_date}')
 
     return output_df
+
+
+def stock_anual_return_calc(
+    tickers: List[str],
+    min_year: int,
+    max_year: int,
+    mmdd: str = '01-01'
+    ) -> pd.DataFrame:
+    """calculate historical annual return
+
+    Args:
+        tickers (List[str]): input tickers
+        min_year (int): min year to include
+        max_year (int): max year to include
+        mmdd (str): month and day
+
+    Returns:
+        pd.DataFrame: df with column of ticker and annual_return
+    """
+    ticker_str = ' '.join(tickers)
+    df_lst = []
+    for t in range(min_year, max_year + 1):
+        d = f'{t}-{mmdd}'
+        d1, d2 = get_nearest_trading_date(d)
+        df = yf.download(ticker_str, start=d1, end=d2)
+        df = df.loc[:, df.columns.get_level_values(0) == 'Adj Close']
+        df.columns = df.columns.droplevel(0)
+        df_lst.append(df.dropna(how='all').reset_index().melt(id_vars='Date', var_name='ticker'))
+
+    price_df = pd.concat(df_lst).dropna(how='any').reset_index(drop=True)
+    price_df['shifted_value'] = price_df \
+        .sort_values(['ticker', 'Date']) \
+        .groupby('ticker')['value'] \
+        .shift()
+
+    price_df['annual_return'] = (price_df['value'] - price_df['shifted_value']) / price_df['shifted_value']
+    avg_return = price_df.dropna(how='any').groupby('ticker').agg({'annual_return': np.mean}).reset_index()
+
+    return avg_return
 
 
 def main(

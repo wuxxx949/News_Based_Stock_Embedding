@@ -4,10 +4,12 @@ import pickle
 import random
 import re
 import uuid
+import datetime
 from typing import Any, List, Tuple
 
 import numpy as np
 import pandas as pd
+import pandas_market_calendars as mcal
 
 STOPWORDS = [
     'ourselves', 'hers', 'between', 'yourself', 'but', 'again', 'there', 'about', 'once',
@@ -145,3 +147,32 @@ def get_target_tickers(dir: str, name: str) -> List[str]:
     return_df = pd.read_parquet(os.path.join(dir, name))
 
     return list(return_df['ticker'].unique())
+
+
+def sleep_time(loc: float, scale: float):
+    out = 0
+    while out <= 1:
+        out = np.random.normal(loc, scale)
+
+    return out
+
+
+def get_nearest_trading_date(date: str) -> Tuple[str]:
+    """find the closet non-past US trading date
+
+    Args:
+        date (str): input date
+
+    Returns:
+        str: trading date
+    """
+    # assume US exchange
+    date_dt = datetime.datetime.strptime(date, '%Y-%m-%d')
+    end_date = date_dt + datetime.timedelta(days=10)
+    end_date_str = datetime.datetime.strftime(end_date, '%Y-%m-%d')
+    nyse = mcal.get_calendar('NYSE')
+    date_range = nyse.schedule(start_date=date, end_date=end_date_str)
+    td = mcal.date_range(date_range, frequency='1D')[:2]
+    td_str = [str(e .to_pydatetime().date()) for e in td]
+
+    return td_str[0], td_str[1]
