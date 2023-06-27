@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Dict, Tuple
 
 import cvxpy as cp
 import numpy as np
@@ -34,7 +34,7 @@ class PortfolioConstruction:
 
 
     @staticmethod
-    def _get_embeddings(embedding_dict: Dict[str, np.array]) -> List[str, np.array]:
+    def _get_embeddings(embedding_dict: Dict[str, np.array]) -> Tuple[str, np.array]:
         tickers = list(embedding_dict.keys())
         embeddings = np.vstack(embedding_dict.values())
 
@@ -42,7 +42,7 @@ class PortfolioConstruction:
 
     def _return_calc_input(self) -> None:
         date_split = self.last_news_date.split('-')
-        self.max_year = date_split[0]
+        self.max_year = int(date_split[0])
         self.mmdd = '-'.join(date_split[1:])
 
     def get_stock_avg_return(self) -> np.array:
@@ -59,7 +59,61 @@ class PortfolioConstruction:
 
         assert len(out) == len(self.tickers), 'avg return len differs from input tickers'
 
-        return out
+        return out.to_numpy()
 
     def portfolio_opt(self, exp_return: float, cov_mat: np.array) -> np.array:
-        wp = cp.Variable(self.n, nonneg=True)
+        constraints = []
+        wp = cp.Variable(len(self.tickers), nonneg=True)
+
+        # sum to 1 constraint
+        constraints.append(sum(wp) == 1)
+        # expectation constraint
+        constraints.append(self.hist_return[np.newaxis,:] @ wp == exp_return)
+        # 0 <= w <= 1 constraint
+        for i, _ in enumerate(self.tickers):
+            constraints.append(wp[i] <= 1)
+            constraints.append(wp[i] >= 0)
+
+        prob = cp.Problem(cp.Minimize(cp.quad_form(wp, cov_mat)), constraints)
+        prob.solve()
+
+        return wp.value
+
+    def embedding_based_opt(self, exp_return:float) -> np.array:
+        out = self.portfolio_opt(exp_return=exp_return, cov_mat=self.embedding_corr)
+
+        return out
+
+    def get_one_year_back_test_return(self) -> np.array:
+        out = stock_anual_return_calc(
+            tickers=self.tickers,
+            min_year=self.max_year,
+            max_year=self.max_year + 1,
+            mmdd=self.mmdd
+            ) \
+            .set_index('ticker') \
+            .filter(self.tickers, axis=0) \
+            .loc[:, 'annual_return']
+
+        return out.to_numpy()
+
+    def get_backtest_return(self, exp_return: float) -> float:
+        # optimal weights
+        opt_w = self.portfolio_opt(exp_return=exp_return, cov_mat=self.embedding_corr)
+        # future 1 year return
+        backtest_return = self.get_one_year_back_test_return()
+
+        return backtest_return @ opt_w
+
+
+
+if __name__ == '__main__':
+    portfolio_constructor = PortfolioConstruction(
+        embedding_path='/home/timnaka123/Documents/stock_embedding_nlp/src/model/',
+        embedding_file='embedding.pickle',
+        last_news_date='2013-10-20'
+        )
+
+    weights = portfolio_constructor.embedding_based_opt(exp_return=0.2)
+
+    r = portfolio_constructor.get_backtest_return(exp_return=0.2)
