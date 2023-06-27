@@ -1,3 +1,6 @@
+import os
+
+import pandas as pd
 import tensorflow as tf
 from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.optimizers import Adam, Nadam
@@ -10,10 +13,9 @@ from src.model.prepare_training_data import ModelDataPrep
 logger = setup_logger(logger_name='model', log_file='model.log')
 
 
-tickers = get_tickers(
-    dir_path='/home/timnaka123/Documents/stock_embedding_nlp/src/data/',
-    obj_name='qualified_tickers.pickle'
-)
+tickers = pd.read_parquet(
+    os.path.join('/home/timnaka123/Documents/stock_embedding_nlp/src/data/', 'target_df.parquet.gzip')
+    )['ticker'].unique()
 
 ticker_vec_layer = tf.keras.layers.TextVectorization(
     len(tickers) + 2, output_sequence_length=1
@@ -100,8 +102,8 @@ model.compile(
 
 
 if __name__ == '__main__':
-    from src.model.prepare_training_data import DateManager
     from src.data.utils import pickle_results
+    from src.model.prepare_training_data import DateManager
 
 
     dm = DateManager(
@@ -140,8 +142,8 @@ if __name__ == '__main__':
         out[t] = encoder_embedding_layer(ticker_vec_layer([t])[0])[0].numpy()
 
     pickle_results(
-        dir='/home/timnaka123/Documents/stock_embedding_nlp/src/model/', 
-        name='embedding.pickle', 
+        dir='/home/timnaka123/Documents/stock_embedding_nlp/src/model/',
+        name='embedding.pickle',
         obj=out
         )
 
