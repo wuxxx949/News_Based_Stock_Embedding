@@ -61,6 +61,7 @@ def embeddings_to_corr(embeddings: np.array) -> np.array:
     corr = numerator / denominator
 
     if not isPD(corr):
+        print('corr is not PD, apply PD adjustment')
         return nearestPD(corr)
 
     return corr
