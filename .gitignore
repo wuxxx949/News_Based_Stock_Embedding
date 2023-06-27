@@ -5,3 +5,4 @@
 # add whitelist
 !.gitignore
 !*.py
+!*.md
