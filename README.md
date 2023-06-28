@@ -11,3 +11,14 @@ There are two types of data used in this repo.
     > However, if you have a request about it, send it to me at premy.enseirb@gmail.com and put the words "bloomberg dataset" in your email body.
 
 - Stock price data is fetched based on the popular Python package `yfinance`.
+
+## Methodology
+### News Preprocessing
+The paper uses a dual-vector representation of news article texts, namely, the TFIDF-weighted word embedding and BERT encoder for news title. In this repo, I used `Fasttext` to train word embeddings based on entire news article collections and used `sentence_transformers` package to encode the article title.
+
+### Model
+The stock price movement prediction is considered a very difficult problem, if we only include news article strictly before the price date. However, if we include the news for the same price date, this problem is more reasonable as the goal is to learn the embedding vector rather than making a good stock price movement preditive model. Therefore, the news of same price date and 4 days prior (total 5 days of news) are included to 'predict' the stock movement.
+
+The daily log return > 0.0068 is labeled as 1 and daily log return < -0.0059 is labeled as 0.
+
+![Drag Racing](image/classifier.png)
