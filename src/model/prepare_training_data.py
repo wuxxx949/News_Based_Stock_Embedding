@@ -89,8 +89,8 @@ class DateManager:
 
         return self.min_date, validation_start, validation_end
 
-    def get_random_split_date(self, data_len: int) -> Tuple[datetime, datetime]:
-        """configure news date range for given data length in year
+    def get_date_range(self, data_len: int) -> Tuple[datetime, datetime]:
+        """configure news date range for given length in year for training and validation
 
         Args:
             data_len (int): number of years used for training and validation
@@ -395,7 +395,7 @@ class ModelDataPrep:
 
         return dataset
 
-    def random_split_data(self, seed: int) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    def random_split_data(self, seed: Optional[int] = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """randomly split dates
 
         Returns:
@@ -405,7 +405,9 @@ class ModelDataPrep:
         # all trading date
         all_trading_dates = target_df.index.unique().to_list()
         # sample training trading dates
-        np.random.seed(seed)
+        if seed is not None:
+            np.random.seed(seed)
+
         train_dates = np.random.choice(
             all_trading_dates,
             size=int(0.8 * len(all_trading_dates)),
@@ -457,7 +459,29 @@ class ModelDataPrep:
             batch_size=batch_size
             )
 
+        # for full training dataset
+        self.embedding_loopup = embedding_lookup
+        self.days_lookback = days_lookback
+        self.batch_size = batch_size
+
         return training_dataset, validation_dataset
 
+    def create_single_dataset(
+        self,
+        ) -> PaddedBatchDataset:
+        """create signle training dataset with all dates
+
+        Returns:
+            PaddedBatchDataset: training dataset with all dates
+        """
+        _, target_df = self.prep_raw_model_data()
+
+        dataset = self._create_dataset(
+            label_df=target_df,
+            embedding_lookup=self.embedding_lookup,
+            batch_size=self.batch_size
+            )
+
+        return dataset
 
 
