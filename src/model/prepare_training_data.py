@@ -1,8 +1,6 @@
-import datetime as dt
 import os
 from datetime import datetime
-from itertools import chain
-from typing import Dict, Iterable, List, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -151,13 +149,16 @@ class ModelDataPrep:
         if not os.path.exists(self.tfidf_embedding_dir):
             os.makedirs(self.tfidf_embedding_dir)
 
-    def _load_target(self):
+    def _load_target(self) -> None:
         target = pd.read_parquet(
             os.path.join(self.save_dir_path, 'target_df.parquet.gzip')
             )
         self.target = target.set_index('date')
 
-    def _load_bert_embeddings(self):
+    def _load_bert_embeddings(self) -> None:
+        """load news title embedding, it is called bert_embedding following paper but the acutal
+            model is all-MiniLM-L6-v2
+        """
         bert_embedding = pd.read_parquet(
             os.path.join(self.save_dir_path, 'sentence_embedding_df.parquet.gzip')
             )
@@ -260,6 +261,8 @@ class ModelDataPrep:
         return embedding
 
     def _get_bert_vector(self, start_date: datetime, end_date: datetime) -> pd.DataFrame:
+        """fetch sentence embedding for given date range
+        """
         start_date = str(start_date.date())
         end_date = str(end_date.date())
 
@@ -267,6 +270,8 @@ class ModelDataPrep:
 
     @lazyproperty
     def bert_df(self) -> pd.DataFrame:
+        """sentence embedding for given date range
+        """
         out = self._get_bert_vector(
             start_date=self.min_date,
             end_date=self.max_date
@@ -282,6 +287,8 @@ class ModelDataPrep:
 
     @lazyproperty
     def target(self) -> pd.DataFrame:
+        """stock movement for given date range
+        """
         out = self._get_target(
             start_date=self.min_date,
             end_date=self.max_date
@@ -290,6 +297,11 @@ class ModelDataPrep:
         return out
 
     def prep_raw_model_data(self) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+        """merge sentence embedding and tfidf embedding by news uuid as input data
+
+        Returns:
+            Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]: training data tuple
+        """
         embedding_df = self.bert_df.reset_index() \
             .merge(self.tfidf_df, on='news_id', how='inner') \
             .sort_values('date') \
@@ -299,10 +311,14 @@ class ModelDataPrep:
 
     @lazyproperty
     def trading_date(self) -> List[datetime]:
+        """unique trading date based on stock movement df
+        """
         return to_date(self.target.index.unique().sort_values())
 
     @lazyproperty
-    def news_date(self):
+    def news_date(self) -> List[datetime]:
+        """dates with news
+        """
         return to_date(self.bert_df.index.unique().sort_values())
 
     @staticmethod
