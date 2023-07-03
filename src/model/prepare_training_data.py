@@ -136,11 +136,17 @@ class ModelDataPrep:
         if not os.path.exists(self.tfidf_embedding_dir):
             os.makedirs(self.tfidf_embedding_dir)
 
+    def rm_cache(self) -> None:
+        # remove cached tfidf df
+        os.rmdir(self.tfidf_embedding_dir)
+
     def _load_target(self) -> None:
         target = pd.read_parquet(
             os.path.join(self.save_dir_path, 'target_df.parquet.gzip')
             )
-        self.target = target.set_index('date')
+        start_date = str(self.min_date.date())
+        end_date = str(self.max_date.date())
+        self.target = target.sort_values('date').set_index('date')[start_date: end_date]
 
     def _load_bert_embeddings(self) -> None:
         """load news title embedding, it is called bert_embedding following paper but the acutal
@@ -267,23 +273,6 @@ class ModelDataPrep:
 
         return out
 
-    def _get_target(self, start_date: datetime, end_date: datetime) -> pd.DataFrame:
-        start_date = str(start_date.date())
-        end_date = str(end_date.date())
-
-        return self.target[start_date: end_date]
-
-    @lazyproperty
-    def target(self) -> pd.DataFrame:
-        """stock movement for given date range
-        """
-        out = self._get_target(
-            start_date=self.min_date,
-            end_date=self.max_date
-            )
-
-        return out
-
     def prep_raw_model_data(self) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """merge sentence embedding and tfidf embedding by news uuid as input data
 
@@ -348,6 +337,9 @@ class ModelDataPrep:
             for _, d in tfidf_embedding:
                 d = d.reset_index(drop=True).reindex(range(sentence_max_news), fill_value=0)
                 tmp_tfidf.append(d.to_numpy().tolist())
+
+            if len(tmp_bert) != 5 or len(tmp_tfidf) != 5:
+                continue
 
             out[str(td)] = [np.array(tmp_bert), np.array(tmp_tfidf)]
 
@@ -426,7 +418,7 @@ class ModelDataPrep:
         self,
         days_lookback: int = 5,
         batch_size: int = 32,
-        seed_value: int = 42
+        seed_value: Optional[int] = None
         ) -> Tuple[PaddedBatchDataset, PaddedBatchDataset]:
         """create modeling dataset
 
