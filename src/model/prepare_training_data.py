@@ -132,9 +132,7 @@ class ModelDataPrep:
         self._load_target()
         # for storing processed tfidf embedding
         self.date_str = f'{str(min_date.date())}_{str(max_date.date())}'
-        self.tfidf_embedding_dir = os.path.join(
-            os.path.dirname(os.path.realpath(__file__)), 'tfidf'
-            )
+        self.tfidf_embedding_dir = os.path.join(self.save_dir_path, 'tfidf')
         if not os.path.exists(self.tfidf_embedding_dir):
             os.makedirs(self.tfidf_embedding_dir)
 
@@ -204,6 +202,14 @@ class ModelDataPrep:
         Returns:
             Dict[str, np.array]: key of news id and value of news tfidf embeddings
         """
+        tfidf_df_path = os.path.join(
+            self.tfidf_embedding_dir, f'tfidf_{self.date_str}.parquet.gzip'
+            )
+
+        # cached processed tfidf df
+        if os.path.exists(tfidf_df_path):
+            return pd.read_parquet(tfidf_df_path)
+
         # training period data
         tfidf_news_files = self._news_file_filter(
             min_date=start_date,
@@ -219,13 +225,6 @@ class ModelDataPrep:
             dtype=np.float32
             )
         X = vectorizer.fit_transform(tfidf_corpus)
-        tfidf_df_path = os.path.join(
-            self.tfidf_embedding_dir, f'tfidf_{self.date_str}.parquet.gzip'
-            )
-
-        # cached processed tfidf df
-        if os.path.exists(tfidf_df_path):
-            return pd.read_parquet(tfidf_df_path)
 
         out = tfidf_weighted_embedding(
             x=X,
