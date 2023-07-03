@@ -1,7 +1,8 @@
 import os
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
 import pandas as pd
+import numpy as np
 import tensorflow as tf
 from keras.engine.functional import Functional
 from keras.layers.core.embedding import Embedding
@@ -109,6 +110,27 @@ def get_model(
     return model, ticker_vec_layer, encoder_embedding_layer
 
 
+def extract_ticker_embedding(
+    ticker_vec_layer: TextVectorization,
+    encoder_embedding_layer: Embedding
+    ) -> Dict[str, np.array]:
+    """fetch trained ticker embeddings
+
+    Args:
+        ticker_vec_layer (TextVectorization): an adapted ticker int lookup layer
+        encoder_embedding_layer (Embedding): a trained ticker embeddings lookup layer
+
+    Returns:
+        Dict[str, np.array]: _description_
+    """
+    tickers = ticker_vec_layer.get_vocabulary()[2:]
+    out = {}
+    for t in tickers:
+        out[t] = encoder_embedding_layer(ticker_vec([t])[0])[0].numpy()
+
+    return out
+
+
 if __name__ == '__main__':
     from src.data.utils import pickle_results
     from src.model.prepare_training_data import DateManager
@@ -121,7 +143,7 @@ if __name__ == '__main__':
 
     dm = DateManager()
 
-    start_date, end_date = dm.get_random_split_date(data_len=7)
+    start_date, end_date = dm.get_date_range(data_len=3)
 
     mdp = ModelDataPrep(
         min_date=start_date,
