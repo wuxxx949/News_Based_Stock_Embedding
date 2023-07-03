@@ -53,7 +53,7 @@ def reuters_single_file_process(
     """find all matched ticker in a Reuters news and fetch headline
 
     Args:
-        path (str): path of a news file
+        path (str): path of a single Reuters news file
 
     Returns:
         List[str]: ticker(s) mentioned in the news
@@ -113,7 +113,7 @@ def bloomberg_single_file_process(
     """find all matched ticker in bloomberg news and fetch headline
 
     Args:
-        path (str): path of a news file
+        path (str): path of a single Bloomberg news file
 
     Returns:
         List[str]: ticker(s) mentioned in the news
@@ -171,6 +171,16 @@ def single_file_process(
     path: str,
     rm_punctuation: bool
     ) -> Tuple[List[str], str]:
+    """process a single Reuters or Bloomberg news file
+
+    Args:
+        news_type (str): 'r' for Reuters and 'b' for Bloomberg
+        path (str): path of a single news file
+        rm_punctuation (bool): if remove punctuation
+
+    Returns:
+        Tuple[List[str], str]: ticker(s) mentioned in the news and news headline
+    """
     try:
         if news_type == 'r':
             matched, headline = reuters_single_file_process(path, rm_punctuation)

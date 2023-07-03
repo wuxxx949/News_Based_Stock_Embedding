@@ -2,13 +2,12 @@
 import collections
 import multiprocessing as mp
 import os
-from multiprocessing import Queue
-from typing import List
 
 import fasttext
 
 from src.data.extract_news import single_file_process
 from src.data.utils import get_news_path, pickle_results
+from src.meta_data import get_meta_data
 
 
 def worker(news_type, path, rm_punctuation, q):
@@ -37,24 +36,17 @@ def text_listener(q, fp):
             f.flush()
 
 
-def news_preprocessing(
-    reuters_data_dir_path: str,
-    bloomberg_data_dir_path: str,
-    save_dir_path: str,
-    rm_punctuation: bool = False
-    ) -> None:
+def news_preprocessing(rm_punctuation: bool = False) -> None:
     """apply mp to process all files
 
     Args:
-        reuters_data_dir_path (str): Reuters news dir
-        bloomberg_data_dir_path (str): Bloomberg news dir
-        save_dir_path (str): directory to save output
         tickers (List[str]): target tickers
         rm_punctuation (bool, optional): if remove punctuation in the headline. Defaults to False.
     """
+    save_dir_path = get_meta_data()['SAVE_DIR']
     all_files = get_news_path(
-        reuters_dir=reuters_data_dir_path,
-        bloomberg_dir=bloomberg_data_dir_path
+        reuters_dir=get_meta_data()['REUTERS_DIR'],
+        bloomberg_dir=get_meta_data()['BLOOMBERG_DIR']
         )
 
     manager = mp.Manager()
@@ -85,31 +77,19 @@ def news_preprocessing(
     pickle_results(dir=save_dir_path, name='ticker_freq.pickle', obj=ticker_freq)
 
 
-def train_word_embedding(training_file: str, dim: int=64, **kargs) -> None:
+def train_word_embedding(dim: int=64, **kargs) -> None:
     """train for word embeddings using fasttext
 
     Args:
-        training_file (str): training text
         dim (int, optional): dimension of the embeddings. Defaults to 64.
     """
     # https://fasttext.cc/docs/en/python-module.html#train_unsupervised-parameters
+    training_file = os.path.join(get_meta_data()['SAVE_DIR'], 'news_corpus.txt')
     model = fasttext.train_unsupervised(training_file, dim=dim, **kargs)
     # model.get_word_vector
-    dir = os.path.dirname(os.path.realpath(__file__))
-    model.save_model(os.path.join(dir, 'news.bin'))
+    model.save_model(os.path.join(get_meta_data()['SAVE_DIR'], 'news.bin'))
 
 
 if __name__ == '__main__':
-    rdir = '/home/timnaka123/Documents/financial-news-dataset/ReutersNews106521'
-    bdir = '/home/timnaka123/Documents/financial-news-dataset/bloomberg'
-
-    news_preprocessing(
-        reuters_data_dir_path=rdir,
-        bloomberg_data_dir_path=bdir,
-        save_dir_path='/home/timnaka123/Documents/stock_embedding_nlp/src/data/',
-        )
-
-    train_word_embedding(
-        training_file='/home/timnaka123/Documents/stock_embedding_nlp/src/data/news_corpus.txt',
-        epoch=7
-        )
+    news_preprocessing()
+    train_word_embedding(epoch=7)
