@@ -112,26 +112,21 @@ def get_model(
 if __name__ == '__main__':
     from src.data.utils import pickle_results
     from src.model.prepare_training_data import DateManager
+    from src.meta_data import get_meta_data
     tickers = pd.read_parquet(
-        os.path.join('/home/timnaka123/Documents/stock_embedding_nlp/src/data/', 'target_df.parquet.gzip')
+        os.path.join(get_meta_data()['SAVE_DIR'], 'target_df.parquet.gzip')
         )['ticker'].unique()
 
     model, ticker_vec, ticker_embedding = get_model(tickers=tickers)
 
-    dm = DateManager(
-        reuters_news_path='/home/timnaka123/Documents/financial-news-dataset/ReutersNews106521',
-        bloomberg_news_path='/home/timnaka123/Documents/financial-news-dataset/bloomberg'
-        )
+    dm = DateManager()
 
     start_date, end_date = dm.get_random_split_date(data_len=7)
 
     mdp = ModelDataPrep(
-        reuters_news_path='/home/timnaka123/Documents/financial-news-dataset/ReutersNews106521',
-        bloomberg_news_path='/home/timnaka123/Documents/financial-news-dataset/bloomberg',
-        save_dir_path='/home/timnaka123/Documents/stock_embedding_nlp/src/data',
         min_date=start_date,
         max_date=end_date
-    )
+        )
     training_ds, validation_ds = mdp.create_dataset(seed_value=41, batch_size=64)
     early_stop = EarlyStopping(monitor='val_accuracy', patience=2)
 
@@ -155,7 +150,7 @@ if __name__ == '__main__':
         out[t] = ticker_embedding(ticker_vec([t])[0])[0].numpy()
 
     pickle_results(
-        dir='/home/timnaka123/Documents/stock_embedding_nlp/src/model/',
+        dir=get_meta_data()['SAVE_DIR'],
         name='embedding.pickle',
         obj=out
         )

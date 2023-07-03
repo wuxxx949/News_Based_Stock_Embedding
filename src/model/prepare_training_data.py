@@ -13,6 +13,7 @@ from src.data.explore import get_path
 from src.data.tfidf_embedding import tfidf_weighted_embedding
 from src.data.utils import STOPWORDS
 from src.logger import setup_logger
+from src.meta_data import get_meta_data
 from src.model.utils import extract_date, lazyproperty, to_date
 
 logger = setup_logger('data', 'data.log')
@@ -21,17 +22,11 @@ logger = setup_logger('data', 'data.log')
 class DateManager:
     """manage date related task for model and portfolio optimization
     """
-    def __init__(
-        self,
-        reuters_news_path: str,
-        bloomberg_news_path: str
-        ) -> None:
+    def __init__(self) -> None:
+        """constructor
         """
-        Args:
-            news_path (str): path to news directory
-        """
-        self.reuters_news_path = reuters_news_path
-        self.bloomberg_news_path = bloomberg_news_path
+        self.reuters_news_path = get_meta_data()['REUTERS_DIR']
+        self.bloomberg_news_path = get_meta_data()['BLOOMBERG_DIR']
         self.min_date, self.max_date = self._get_dates()
 
     def _get_dates(self) -> Tuple[datetime, datetime]:
@@ -114,9 +109,6 @@ class DateManager:
 class ModelDataPrep:
     def __init__(
         self,
-        reuters_news_path: str,
-        bloomberg_news_path: str,
-        save_dir_path: str,
         min_date: datetime,
         max_date: datetime,
         min_df: float = 0.0001
@@ -124,16 +116,13 @@ class ModelDataPrep:
         """Constructor
 
         Args:
-            reuters_news_path (str): path to reuters news directory
-            bloomberg_news_path (str): path to bloomberg news directory
-            save_dir_path (str): path to news directory
             min_date (datetime): min news date, inclusive
             max_date (datetime): max news date, inclusive
             min_dfend_date (float, optional): min_df arg for TfidfVectorizer. Defaults to 0.0001.
         """
-        self.reuters_news_path = reuters_news_path
-        self.bloomberg_news_path = bloomberg_news_path
-        self.save_dir_path = save_dir_path
+        self.reuters_news_path = get_meta_data()['REUTERS_DIR']
+        self.bloomberg_news_path = get_meta_data()['BLOOMBERG_DIR']
+        self.save_dir_path = get_meta_data()['SAVE_DIR']
         self.min_date = min_date
         self.max_date = max_date
         self.min_df = min_df
@@ -470,62 +459,6 @@ class ModelDataPrep:
             )
 
         return training_dataset, validation_dataset
-
-
-if __name__ == '__main__':
-    dm = DateManager(
-        reuters_news_path='/home/timnaka123/Documents/financial-news-dataset/ReutersNews106521',
-        bloomberg_news_path='/home/timnaka123/Documents/financial-news-dataset/bloomberg'
-        )
-    t_start_date, v_start_date, v_end_date = dm.get_model_date(2, 1)
-
-    mdp = ModelDataPrep(
-        news_path='/home/timnaka123/Documents/financial-news-dataset/ReutersNews106521',
-        save_dir_path='/home/timnaka123/Documents/stock_embedding_nlp/src/data',
-        training_start_date=t_start_date,
-        validation_start_date=v_start_date,
-        validation_end_date=v_end_date
-    )
-
-    train_df, train_target, valid_df, valid_target = mdp.prep_raw_model_data()
-
-    out = {}
-    for td in mdp.training_trading_date:
-        nd = [e for e in mdp.training_news_date if 0 <= (e - td).days <= 4]
-        if len(nd) != 5:
-            continue
-        # fetch newes
-        min_date = str(min(nd))
-        max_date = str(max(nd))
-        tmp_df = train_df[min_date: max_date]
-        bert_embedding = tmp_df.filter(regex='^c', axis=1).groupby('date')
-        tfidf_embedding = tmp_df.filter(regex='^f', axis=1).groupby('date')
-        tmp_bert = []
-        bert_max_news = max([len(e) for e in dict(list(bert_embedding)).values()])
-        for _, d in bert_embedding:
-            # need to pad to the longest number of news in the neighboring days
-            d = d.reset_index(drop=True).reindex(range(bert_max_news ), fill_value=0)
-            tmp_bert.append(d.to_numpy().tolist())
-        tmp_tfidf = []
-        for _, d in tfidf_embedding:
-            d = d.reset_index(drop=True).reindex(range(bert_max_news ), fill_value=0)
-            tmp_tfidf.append(d.to_numpy().tolist())
-
-        out[str(td)] = [np.array(tmp_bert), np.array(tmp_tfidf)]
-
-    label_df = train_target
-    embedding_lookup = out
-
-
-    from src.data.stock_data import get_tickers
-
-    tickers = get_tickers(
-        dir_path='/home/timnaka123/Documents/stock_embedding_nlp/src/data/',
-        obj_name='qualified_tickers.pickle'
-    )
-    # use a tuple to create features and label
-    f1, f2, labels = (np.random.sample((100,2)), np.random.choice(tickers, 100), np.random.sample((100,1)))
-    dataset = tf.data.Dataset.from_tensor_slices(((f1, f2),labels))
 
 
 
