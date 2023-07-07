@@ -17,7 +17,7 @@ model = fasttext.load_model(path=str(bin_file))
 def _tfidf_weighted_embedding(
     x: csr_matrix,
     news_id: List[str],
-    vectorizer
+    vectorizer: TfidfVectorizer
     ):
     """note that some news may have all 0 in the sparse matrix depends on min_df input
     """
@@ -46,7 +46,7 @@ def _tfidf_weighted_embedding(
 
 def tfidf_weighted_embedding(
     x: csr_matrix,
-    trained_vecterizer,
+    trained_vecterizer: TfidfVectorizer,
     news_id: List[str],
     ncores: Optional[int] = None,
     batch_size: int = 500,
