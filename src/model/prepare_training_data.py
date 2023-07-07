@@ -264,7 +264,7 @@ class ModelDataPrep:
         return self.bert_embedding[start_date: end_date]
 
     @lazyproperty
-    def bert_df(self) -> pd.DataFrame:
+    def sentence_embedding_df(self) -> pd.DataFrame:
         """sentence embedding for given date range
         """
         out = self._get_bert_vector(
@@ -280,7 +280,8 @@ class ModelDataPrep:
         Returns:
             Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]: training data tuple
         """
-        embedding_df = self.bert_df.reset_index() \
+        embedding_df = self.sentence_embedding_df \
+            .reset_index() \
             .merge(self.tfidf_df, on='news_id', how='inner') \
             .sort_values('date') \
             .set_index('date')
@@ -297,7 +298,9 @@ class ModelDataPrep:
     def news_date(self) -> List[datetime]:
         """dates with news
         """
-        return to_date(self.bert_df.index.unique().sort_values())
+        result = to_date(self.sentence_embedding_df.index.unique().sort_values())
+
+        return result
 
     @staticmethod
     def _fetch_embeddings(
