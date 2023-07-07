@@ -223,7 +223,7 @@ class ModelDataPrep:
             )
         input_data = embedding_batch_preprocessing(paths=tfidf_news_files)
         tfidf_corpus = [e[2] for e in input_data if e[2] is not None]
-        tfidf_news_id = [e[1] for e in input_data if e[2] is not None]
+        news_ids = [e[1] for e in input_data if e[2] is not None]
 
         vectorizer = TfidfVectorizer(
             min_df=self.min_df,
@@ -236,7 +236,7 @@ class ModelDataPrep:
         out = tfidf_weighted_embedding(
             x=X,
             trained_vecterizer=vectorizer,
-            news_id=tfidf_news_id
+            news_id=news_ids
             )
         results = self._tfidf_to_df(out)
         # save results to file
