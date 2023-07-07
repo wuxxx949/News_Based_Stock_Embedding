@@ -1,16 +1,15 @@
-import os
 import re
 from string import punctuation
 from typing import List, Tuple
 
+from src.data.utils import text_preprocessing
 
-punc_pattern = '([' + ''.join(punctuation) + '])'
 
 def process_punc(text: str, rm_punc: bool) -> str:
     # make each sentence in a newline
     # pattern = r"(?<=\. )(?=[A-Z1-9])"
     # text = re.sub(pattern, r'\n', text)
-
+    punc_pattern = '([' + ''.join(punctuation) + '])'
     if rm_punc:
         text = re.sub(r'U\.S\.', 'us', text)
         text = re.sub(r'U\.K\.', 'uk', text)
@@ -56,7 +55,7 @@ def reuters_single_file_process(
         path (str): path of a single Reuters news file
 
     Returns:
-        List[str]: ticker(s) mentioned in the news
+        Tuple[List[str], str]: ticker(s) mentioned in the news and
     """
     try:
         with open(path, 'r', encoding="utf8") as f:
@@ -99,9 +98,10 @@ def reuters_single_file_process(
     else:
         matched = []
 
-    news_text = break_sentence(news_text)
+    # news_text = break_sentence(news_text)
 
-    news_text = process_punc(text=news_text, rm_punc=rm_punctuation)
+    # news_text = process_punc(text=news_text, rm_punc=rm_punctuation)
+    news_text = text_preprocessing(text=news_text)
 
     return matched, news_text
 
@@ -148,7 +148,7 @@ def bloomberg_single_file_process(
     pattern = r"To contact the(.*?)bloomberg\.net"
     # re.DOTALL flag to make it match newlines as well.
     news_text = re.sub(pattern , '', news_text, flags=re.DOTALL)
-    news_text = break_sentence(news_text)
+    # news_text = break_sentence(news_text)
 
     # find mentioned tickers
     # pattern = '\(' + '\)|\('.join(tickers) + '\)'
@@ -161,7 +161,8 @@ def bloomberg_single_file_process(
     else:
         matched = []
 
-    news_text = process_punc(text=news_text, rm_punc=rm_punctuation)
+    # news_text = process_punc(text=news_text, rm_punc=rm_punctuation)
+    news_text = text_preprocessing(text=news_text)
 
     return matched, news_text
 
@@ -194,7 +195,8 @@ def single_file_process(
 
 
 if __name__ == '__main__':
-    from src.data.utils import sample_news, get_raw_news
+    from src.data.utils import get_raw_news, sample_news
+
     # test reuters path
     file = 'us-aig-idUSTRE62E0GQ20100315'
     folder = '/home/timnaka123/Documents/financial-news-dataset/ReutersNews106521/20100315'

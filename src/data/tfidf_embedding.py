@@ -1,15 +1,17 @@
 import multiprocessing as mp
+import os
 from functools import reduce
 from typing import List, Optional
-import fasttext
 
+import fasttext
 import numpy as np
 from scipy.sparse import csr_matrix
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 from src.data.utils import STOPWORDS
+from src.meta_data import get_meta_data
 
-bin_file='/home/timnaka123/Documents/stock_embedding_nlp/src/data/news.bin'
+bin_file=os.path.join(get_meta_data()['SAVE_DIR'], 'news.bin')
 # cannot pickle fasttext object in MP so make it global
 model = fasttext.load_model(path=str(bin_file))
 

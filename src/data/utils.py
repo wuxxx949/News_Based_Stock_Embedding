@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import pandas_market_calendars as mcal
 
+
 STOPWORDS = [
     'ourselves', 'hers', 'between', 'yourself', 'but', 'again', 'there', 'about', 'once',
     'during', 'out', 'very', 'having', 'with', 'they', 'own', 'an', 'be', 'some', 'for',
@@ -176,3 +177,19 @@ def get_nearest_trading_date(date: str) -> Tuple[str]:
     td_str = [str(e .to_pydatetime().date()) for e in td]
 
     return td_str[0], td_str[1]
+
+
+def text_preprocessing(text: str):
+    """preprocessing text
+
+    Args:
+        text (str): news headline
+    """
+    # rm non-alphabetical
+    s = re.sub(r'[^a-zA-Z0-9]', ' ', text.lower())
+    # at most one space
+    s = re.sub(r' +', ' ', s)
+    # rm single letter
+    s = ' '.join([e for e in s.split(' ') if len(e) > 1 and e not in STOPWORDS])
+
+    return s

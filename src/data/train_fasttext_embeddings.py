@@ -92,4 +92,4 @@ def train_word_embedding(dim: int=64, **kargs) -> None:
 
 if __name__ == '__main__':
     news_preprocessing()
-    train_word_embedding(epoch=7)
+    train_word_embedding(epoch=5)

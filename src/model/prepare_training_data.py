@@ -11,7 +11,7 @@ from tensorflow.python.data.ops.dataset_ops import PaddedBatchDataset
 from src.data.bert_embedding import embedding_batch_preprocessing
 from src.data.explore import get_path
 from src.data.tfidf_embedding import tfidf_weighted_embedding
-from src.data.utils import STOPWORDS
+from src.data.utils import STOPWORDS, text_preprocessing
 from src.logger import setup_logger
 from src.meta_data import get_meta_data
 from src.model.utils import extract_date, lazyproperty, to_date
@@ -118,7 +118,7 @@ class ModelDataPrep:
         Args:
             min_date (datetime): min news date, inclusive
             max_date (datetime): max news date, inclusive
-            min_dfend_date (float, optional): min_df arg for TfidfVectorizer. Defaults to 0.0001.
+            min_df (float, optional): min_df arg for TfidfVectorizer. Defaults to 0.0001.
         """
         self.reuters_news_path = get_meta_data()['REUTERS_DIR']
         self.bloomberg_news_path = get_meta_data()['BLOOMBERG_DIR']
@@ -222,7 +222,7 @@ class ModelDataPrep:
             max_date=end_date
             )
         input_data = embedding_batch_preprocessing(paths=tfidf_news_files)
-        tfidf_corpus = [e[2] for e in input_data if e[2] is not None]
+        tfidf_corpus = [text_preprocessing(e[2]) for e in input_data if e[2] is not None]
         news_ids = [e[1] for e in input_data if e[2] is not None]
 
         vectorizer = TfidfVectorizer(

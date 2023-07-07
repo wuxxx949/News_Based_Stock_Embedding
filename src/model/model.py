@@ -10,7 +10,6 @@ from keras.layers.preprocessing.text_vectorization import TextVectorization
 from tensorflow.keras.callbacks import EarlyStopping
 
 from src.logger import setup_logger
-from src.model.prepare_training_data import ModelDataPrep
 
 logger = setup_logger(logger_name='model', log_file='model.log')
 
@@ -133,7 +132,7 @@ def extract_ticker_embedding(
 
 if __name__ == '__main__':
     from src.data.utils import pickle_results
-    from src.model.prepare_training_data import DateManager
+    from src.model.prepare_training_data import DateManager, ModelDataPrep
     from src.meta_data import get_meta_data
     tickers = pd.read_parquet(
         os.path.join(get_meta_data()['SAVE_DIR'], 'target_df.parquet.gzip')
@@ -143,19 +142,20 @@ if __name__ == '__main__':
 
     dm = DateManager()
 
-    start_date, end_date = dm.get_date_range(data_len=3)
+    start_date, end_date = dm.get_date_range(data_len=7)
 
     mdp = ModelDataPrep(
         min_date=start_date,
-        max_date=end_date
+        max_date=end_date,
+        min_df=0.0001
         )
-    training_ds, validation_ds = mdp.create_dataset(seed_value=41, batch_size=64)
-    early_stop = EarlyStopping(monitor='val_accuracy', patience=2)
+    training_ds, validation_ds = mdp.create_dataset(seed_value=28, batch_size=64)
+    early_stop = EarlyStopping(monitor='val_accuracy', patience=5)
 
     hisotry = model.fit(
         training_ds,
         validation_data=validation_ds,
-        epochs=1,
+        epochs=20,
         callbacks=[early_stop]
         )
 
@@ -167,14 +167,4 @@ if __name__ == '__main__':
 
     # extract embeddings
     # TODO: make a function
-    out = {}
-    for t in tickers:
-        out[t] = ticker_embedding(ticker_vec([t])[0])[0].numpy()
-
-    pickle_results(
-        dir=get_meta_data()['SAVE_DIR'],
-        name='embedding.pickle',
-        obj=out
-        )
-    tf.keras.backend.clear_session()
-
+    # out = {}y

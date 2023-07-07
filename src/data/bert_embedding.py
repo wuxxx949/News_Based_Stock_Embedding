@@ -197,25 +197,8 @@ def bert_compression(
 
 
 if __name__ == '__main__':
-    from transformers import BertTokenizer, TFBertModel
-
-    headline_path = '/home/timnaka123/Documents/stock_embedding_nlp/src/data/headlines.txt'
-    max_headline = longest_line(headline_path)
-
-    all_paths = get_news_path()
-
-    tokenizer = BertTokenizer.from_pretrained('bert-large-uncased')
-    model = TFBertModel.from_pretrained("bert-large-uncased")
-
-    embedding_array, news_date, news_id = generate_embedding(
-        all_pathes = all_paths,
-        tokenizer=tokenizer,
-        model=model,
-        max_len=max_headline,
-        )
-
-    pca_df = bert_compression(
-        embedding_array=embedding_array,
-        news_date=news_date,
-        news_id=news_id,
-        )
+    from src.data.utils import sample_news, get_raw_news, headline_preprocessing
+    path = sample_news(os.environ['REUTERS_DIR'])
+    print(single_file_process(path))
+    print(headline_preprocessing(single_file_process(path)))
+    print(get_raw_news(path))
