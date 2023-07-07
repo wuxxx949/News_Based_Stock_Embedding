@@ -26,23 +26,20 @@ def _tfidf_weighted_embedding(
     # i = 0
     i = nonzero_idx[0][0]
     results = {}
-    tmp_tfidf_wt = []
     tmp_embedding = 0
     for idx in nonzero_idx:
         if idx[0] > i:
-            results[news_id[i]] = tmp_embedding / sum(tmp_tfidf_wt)
+            results[news_id[i]] = tmp_embedding
             # reset
             i = idx[0]
-            tmp_tfidf_wt = []
             tmp_embedding = 0
 
         w = vectorizer.get_feature_names_out()[idx[1]]
         tfidf = x[idx]
-        tmp_tfidf_wt.append(tfidf)
         tmp_embedding += tfidf * model.get_word_vector(w)
 
     # attach the last row
-    results[news_id[i]] = tmp_embedding / sum(tmp_tfidf_wt)
+    results[news_id[i]] = tmp_embedding
 
     return results
 

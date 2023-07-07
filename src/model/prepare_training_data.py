@@ -228,7 +228,8 @@ class ModelDataPrep:
         vectorizer = TfidfVectorizer(
             min_df=self.min_df,
             stop_words=STOPWORDS,
-            dtype=np.float32
+            dtype=np.float32,
+            norm='l1'
             )
         X = vectorizer.fit_transform(tfidf_corpus)
 
