@@ -99,10 +99,17 @@ def get_model(
         inputs=[context_embedding, word_embedding, ticker_inputs],
         outputs=[Y_proba]
         )
+    lr_fn = tf.keras.optimizers.schedules.CosineDecay(
+        initial_learning_rate=1e-4,
+        alpha=0.01,
+        decay_steps=500
+    )
+    optimizer = tf.keras.optimizers.Adam(learning_rate=lr_fn)
+    # tf.keras.optimizers.schedules.CosineDecay
 
     model.compile(
         loss='binary_crossentropy',
-        optimizer= tf.keras.optimizers.Nadam(learning_rate=learning_rate),
+        optimizer= optimizer, #tf.keras.optimizers.Nadam(learning_rate=learning_rate)
         metrics=['accuracy']
         )
 
@@ -138,11 +145,11 @@ if __name__ == '__main__':
         os.path.join(get_meta_data()['SAVE_DIR'], 'target_df.parquet.gzip')
         )['ticker'].unique()
 
-    model, ticker_vec, ticker_embedding = get_model(tickers=tickers)
+    model, ticker_vec, ticker_embedding = get_model(tickers=tickers, learning_rate=0.0002)
 
     dm = DateManager()
 
-    start_date, end_date = dm.get_date_range(data_len=7)
+    start_date, end_date = dm.get_date_range(data_len=3)
 
     mdp = ModelDataPrep(
         min_date=start_date,
@@ -150,12 +157,12 @@ if __name__ == '__main__':
         min_df=0.0001
         )
     training_ds, validation_ds = mdp.create_dataset(seed_value=28, batch_size=64)
-    early_stop = EarlyStopping(monitor='val_accuracy', patience=5)
+    early_stop = EarlyStopping(monitor='val_loss', patience=10)
 
     hisotry = model.fit(
         training_ds,
         validation_data=validation_ds,
-        epochs=20,
+        epochs=40,
         callbacks=[early_stop]
         )
 
