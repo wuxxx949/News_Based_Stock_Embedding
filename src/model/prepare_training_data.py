@@ -12,6 +12,7 @@ from src.data.bert_embedding import embedding_batch_preprocessing
 from src.data.explore import get_path
 from src.data.tfidf_embedding import tfidf_weighted_embedding
 from src.data.utils import STOPWORDS, text_preprocessing
+from src.data.utils import STOPWORDS, text_preprocessing
 from src.logger import setup_logger
 from src.meta_data import get_meta_data
 from src.model.utils import extract_date, lazyproperty, to_date
