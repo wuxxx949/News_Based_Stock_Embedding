@@ -1,6 +1,9 @@
 import datetime
 from typing import Iterable, List
 
+import pandas as pd
+
+
 class lazyproperty:
     def __init__(self, func):
         self.func = func
@@ -30,3 +33,21 @@ def extract_date(fpath: str) -> str:
 
 def to_date(array: Iterable) -> List[datetime.date]:
     return [e.to_pydatetime().date() for e in array]
+
+
+def pd_anti_join(df1: pd.DataFrame, df2: pd.DataFrame) -> pd.DataFrame:
+    """find df1 rows that are not in df2
+
+    Args:
+        df1 (pd.DataFrame): first dataframe
+        df2 (pd.DataFrame): second dataframe
+
+    Returns:
+        pd.DataFrame: anti-join df
+    """
+    outer = df1.merge(df2, how='outer', indicator=True)
+    anti_join = outer \
+        .loc[(outer._merge=='left_only'), :] \
+        .drop('_merge', axis=1)
+
+    return anti_join

@@ -12,10 +12,9 @@ from src.data.bert_embedding import embedding_batch_preprocessing
 from src.data.explore import get_path
 from src.data.tfidf_embedding import tfidf_weighted_embedding
 from src.data.utils import STOPWORDS, text_preprocessing
-from src.data.utils import STOPWORDS, text_preprocessing
 from src.logger import setup_logger
 from src.meta_data import get_meta_data
-from src.model.utils import extract_date, lazyproperty, to_date
+from src.model.utils import extract_date, lazyproperty, pd_anti_join, to_date
 
 logger = setup_logger('data', 'data.log')
 
@@ -323,25 +322,29 @@ class ModelDataPrep:
         """
         out = {}
         for td in trading_dates:
-            nd = [e for e in news_dates if 0 <= (e - td).days <= (days_lookback - 1)]
+            nd = [e for e in news_dates if 0 <= (td - e).days <= (days_lookback - 1)]
             if len(nd) != 5:
                 continue
             # fetch newes
+            tmp_bert = []
+            tmp_tfidf = []
             min_date = str(min(nd))
             max_date = str(max(nd))
-            tmp_df = embedding_df[min_date: max_date]
-            sentence_embedding = tmp_df.filter(regex='^c', axis=1).sort_index().groupby('date')
-            tfidf_embedding = tmp_df.filter(regex='^f', axis=1).sort_index().groupby('date')
-            tmp_bert = []
-            sentence_max_news = max([len(e) for e in dict(list(sentence_embedding)).values()])
-            for _, d in sentence_embedding:
-                # need to pad to the longest number of news in the neighboring days
-                d = d.reset_index(drop=True).reindex(range(sentence_max_news), fill_value=0)
-                tmp_bert.append(d.to_numpy().tolist())
-            tmp_tfidf = []
-            for _, d in tfidf_embedding:
-                d = d.reset_index(drop=True).reindex(range(sentence_max_news), fill_value=0)
-                tmp_tfidf.append(d.to_numpy().tolist())
+            tmp_df = embedding_df[min_date: max_date].sort_index().groupby('date')
+            max_news_cnt = max([len(e) for e in dict(list(tmp_df)).values()])
+
+            for _, d in tmp_df:
+                tmp_sentence_embedding = d \
+                    .filter(regex='^c', axis=1) \
+                    .reset_index(drop=True) \
+                    .reindex(range(max_news_cnt), fill_value=0)
+                tmp_bert.append(tmp_sentence_embedding.to_numpy().tolist())
+
+                tmp_tfidf_embedding = d \
+                    .filter(regex='^f', axis=1) \
+                    .reset_index(drop=True) \
+                    .reindex(range(max_news_cnt), fill_value=0)
+                tmp_tfidf.append(tmp_tfidf_embedding.to_numpy().tolist())
 
             if len(tmp_bert) != 5 or len(tmp_tfidf) != 5:
                 continue
@@ -375,7 +378,7 @@ class ModelDataPrep:
 
         def generator():
             for se, te, t, l in zip(sentence_embeddings, tfidf_embeddings, ticker, label):
-                if se is not None:
+                if se is not None and te is not None:
                     yield (se, te, t), l
 
         # .shuffle(buffer_size=1000, seed=seed_value)
@@ -392,8 +395,16 @@ class ModelDataPrep:
 
         return dataset
 
-    def random_split_data(self, seed: Optional[int] = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        """randomly split dates
+    def random_split_data_by_date(
+        self,
+        training_proportion: float = 0.8,
+        seed: Optional[int] = None
+        ) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """randomly split data by dates
+
+        Args:
+            training_proportion (float, optional): training sample proportion. Defaults to 0.8.
+            seed (Optional[int], optional): RNG seed. Defaults to None.
 
         Returns:
             Tuple[pd.DataFrame, pd.DataFrame]: training and validation target df
@@ -407,7 +418,7 @@ class ModelDataPrep:
 
         train_dates = np.random.choice(
             all_trading_dates,
-            size=int(0.8 * len(all_trading_dates)),
+            size=int(training_proportion * len(all_trading_dates)),
             replace=False
             )
 
@@ -419,26 +430,61 @@ class ModelDataPrep:
 
         return train_target, valid_target
 
+    def random_split_data(
+        self,
+        training_proportion: float = 0.8,
+        seed: Optional[int] = None
+        ) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """randomly split data
+
+        Args:
+            training_proportion (float, optional): training sample proportion. Defaults to 0.8.
+            seed (Optional[int], optional): RNG seed. Defaults to None.
+
+        Returns:
+            Tuple[pd.DataFrame, pd.DataFrame]: training and validation target df
+        """
+        _, target_df = self.prep_raw_model_data()
+        train_target = target_df \
+            .sample(frac=training_proportion, random_state=seed) \
+            .sample(frac=1, random_state=seed) # randomize training df
+
+        valid_target = pd_anti_join(
+            df1=target_df.reset_index(),
+            df2=train_target.reset_index()
+            ).set_index('date')
+
+        logger.info(f'training target len: {len(train_target)}')
+        logger.info(f'validation target len: {len(valid_target)}')
+
+        return train_target, valid_target
+
     def create_dataset(
         self,
         days_lookback: int = 5,
         batch_size: int = 32,
-        seed_value: Optional[int] = None
+        seed_value: Optional[int] = None,
+        split_method: str = 'random'
         ) -> Tuple[PaddedBatchDataset, PaddedBatchDataset]:
         """create modeling dataset
 
         Args:
             split_method (str): how to split data into training and validation
-            days_lookback (int, optional): _description_. Defaults to 5.
-            batch_size (int, optional): _description_. Defaults to 32.
-            seed (int, optional): _description_. Defaults to 42.
+            days_lookback (int, optional): number of days for news to include. Defaults to 5.
+            batch_size (int, optional): batch size. Defaults to 32.
+            seed_value (Optional[int], optional): RNG seed. Defaults to 42.
+            split_method(str, optional):
 
         Returns:
             Tuple[PaddedBatchDataset, PaddedBatchDataset]: training and validation dataset
         """
         embedding_df, _ = self.prep_raw_model_data()
 
-        train_target_random, valid_target_random = self.random_split_data(seed=seed_value)
+        if split_method == 'random':
+            train_target_random, valid_target_random = self.random_split_data(seed=seed_value)
+        else:
+            train_target_random, valid_target_random = self.random_split_data_by_date(seed=seed_value)
+
         embedding_lookup = self._fetch_embeddings(
             trading_dates=self.trading_date,
             news_dates=self.news_date,
