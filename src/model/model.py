@@ -44,7 +44,9 @@ class NewsAttention(tf.keras.layers.Layer):
 
 def get_model(
     tickers: List[str],
-    kwargs
+    initial_learning_rate: float,
+    alpha: float,
+    decay_steps: int
     ) -> Tuple[Functional, TextVectorization, Embedding]:
     """model architecture
 
@@ -52,7 +54,7 @@ def get_model(
         tickers (List[str]): unique tickers
 
     Returns:
-        Functional: model object
+        Tuple[Functional, TextVectorization, Embedding]: model object, ticker layer, and stock embedding layer
     """
     # map ticker string to int, +2 for reserved int
     ticker_vec_layer = tf.keras.layers.TextVectorization(
@@ -99,7 +101,11 @@ def get_model(
         inputs=[context_embedding, word_embedding, ticker_inputs],
         outputs=[Y_proba]
         )
-    lr_fn = tf.keras.optimizers.schedules.CosineDecay(**kwargs)
+    lr_fn = tf.keras.optimizers.schedules.CosineDecay(
+        initial_learning_rate=initial_learning_rate,
+        alpha=alpha,
+        decay_steps=decay_steps
+        )
     optimizer = tf.keras.optimizers.Adam(learning_rate=lr_fn)
     # tf.keras.optimizers.schedules.CosineDecay
 
@@ -125,7 +131,7 @@ def extract_ticker_embedding(
     Returns:
         Dict[str, np.array]: _description_
     """
-    tickers = ticker_vec_layer.get_vocabulary()[2:]
+    tickers = ticker_vec_layer.get_vocabulary()[2:] # index 0, 1 for reserved tokcen
     out = {}
     for t in tickers:
         out[t] = encoder_embedding_layer(ticker_vec([t])[0])[0].numpy()
@@ -157,7 +163,11 @@ if __name__ == '__main__':
         min_df=0.001
         )
     training_ds, validation_ds = mdp.create_dataset(seed_value=42, batch_size=64)
-    early_stop = EarlyStopping(monitor='val_accuracy', patience=10)
+    early_stop = EarlyStopping(
+        monitor='val_loss',
+        patience=10,
+        start_from_epoch=5
+        )
 
     hisotry = model.fit(
         training_ds,
