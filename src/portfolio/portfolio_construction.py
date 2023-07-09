@@ -3,7 +3,7 @@ from typing import Dict, Tuple
 import cvxpy as cp
 import numpy as np
 
-from src.data.stock_data import stock_anual_return_calc
+from src.data.stock_data import stock_annual_return_calc
 from src.data.utils import load_pickled_obj
 from src.portfolio.utils import embeddings_to_corr
 
@@ -47,7 +47,7 @@ class PortfolioConstruction:
 
     def get_stock_avg_return(self) -> np.array:
         self._return_calc_input()
-        out = stock_anual_return_calc(
+        out = stock_annual_return_calc(
             tickers=self.tickers,
             min_year=self.max_year - 10,
             max_year=self.max_year,
@@ -85,7 +85,7 @@ class PortfolioConstruction:
         return out
 
     def get_one_year_back_test_return(self) -> np.array:
-        out = stock_anual_return_calc(
+        out = stock_annual_return_calc(
             tickers=self.tickers,
             min_year=self.max_year,
             max_year=self.max_year + 1,

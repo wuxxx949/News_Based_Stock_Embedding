@@ -11,6 +11,7 @@ from src.data.sp500 import hist_sp500
 from src.data.utils import (get_nearest_trading_date, get_path,
                             load_pickled_obj, sleep_time)
 from src.logger import setup_logger
+from src.meta_data import get_meta_data
 
 logger = setup_logger('data', 'data.log')
 
@@ -146,7 +147,7 @@ def create_target(
     return output_df
 
 
-def stock_anual_return_calc(
+def stock_annual_return_calc(
     tickers: List[str],
     min_year: int,
     max_year: int,

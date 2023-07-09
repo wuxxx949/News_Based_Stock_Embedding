@@ -10,6 +10,8 @@ There are two types of data used in this repo.
 - News data from Reuters and Bloomberg from 2006 to 2013. The data from original [repo](https://github.com/philipperemy/financial-news-dataset) is no longer available, but you can email the author for the dataset for your own research.
     > However, if you have a request about it, send it to me at premy.enseirb@gmail.com and put the words "bloomberg dataset" in your email body.
 
+    Note that the Reuters data shared above only has title, so I only used the Bloomberg data.
+- For complete Reuters data, you can find [here](https://github.com/HanssonMagnus/financial-news-dataset).
 - Stock price data is fetched based on the popular Python package `yfinance`.
 
 ## Methodology

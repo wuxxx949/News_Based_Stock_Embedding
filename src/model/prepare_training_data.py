@@ -1,8 +1,6 @@
-import datetime as dt
 import os
 from datetime import datetime
-from itertools import chain
-from typing import Dict, Iterable, List, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -13,9 +11,10 @@ from tensorflow.python.data.ops.dataset_ops import PaddedBatchDataset
 from src.data.bert_embedding import embedding_batch_preprocessing
 from src.data.explore import get_path
 from src.data.tfidf_embedding import tfidf_weighted_embedding
-from src.data.utils import STOPWORDS
+from src.data.utils import STOPWORDS, text_preprocessing
 from src.logger import setup_logger
-from src.model.utils import extract_date, lazyproperty, to_date
+from src.meta_data import get_meta_data
+from src.model.utils import extract_date, lazyproperty, pd_anti_join, to_date
 
 logger = setup_logger('data', 'data.log')
 
@@ -23,17 +22,11 @@ logger = setup_logger('data', 'data.log')
 class DateManager:
     """manage date related task for model and portfolio optimization
     """
-    def __init__(
-        self,
-        reuters_news_path: str,
-        bloomberg_news_path: str
-        ) -> None:
+    def __init__(self) -> None:
+        """constructor
         """
-        Args:
-            news_path (str): path to news directory
-        """
-        self.reuters_news_path = reuters_news_path
-        self.bloomberg_news_path = bloomberg_news_path
+        self.reuters_news_path = get_meta_data()['REUTERS_DIR']
+        self.bloomberg_news_path = get_meta_data()['BLOOMBERG_DIR']
         self.min_date, self.max_date = self._get_dates()
 
     def _get_dates(self) -> Tuple[datetime, datetime]:
@@ -96,8 +89,8 @@ class DateManager:
 
         return self.min_date, validation_start, validation_end
 
-    def get_random_split_date(self, data_len: int) -> Tuple[datetime, datetime]:
-        """configure news date range for given data length in year
+    def get_date_range(self, data_len: int) -> Tuple[datetime, datetime]:
+        """configure news date range for given length in year for training and validation
 
         Args:
             data_len (int): number of years used for training and validation
@@ -116,9 +109,6 @@ class DateManager:
 class ModelDataPrep:
     def __init__(
         self,
-        reuters_news_path: str,
-        bloomberg_news_path: str,
-        save_dir_path: str,
         min_date: datetime,
         max_date: datetime,
         min_df: float = 0.0001
@@ -126,16 +116,13 @@ class ModelDataPrep:
         """Constructor
 
         Args:
-            reuters_news_path (str): path to reuters news directory
-            bloomberg_news_path (str): path to bloomberg news directory
-            save_dir_path (str): path to news directory
             min_date (datetime): min news date, inclusive
             max_date (datetime): max news date, inclusive
-            min_dfend_date (float, optional): min_df arg for TfidfVectorizer. Defaults to 0.0001.
+            min_df (float, optional): min_df arg for TfidfVectorizer. Defaults to 0.0001.
         """
-        self.reuters_news_path = reuters_news_path
-        self.bloomberg_news_path = bloomberg_news_path
-        self.save_dir_path = save_dir_path
+        self.reuters_news_path = get_meta_data()['REUTERS_DIR']
+        self.bloomberg_news_path = get_meta_data()['BLOOMBERG_DIR']
+        self.save_dir_path = get_meta_data()['SAVE_DIR']
         self.min_date = min_date
         self.max_date = max_date
         self.min_df = min_df
@@ -145,19 +132,26 @@ class ModelDataPrep:
         self._load_target()
         # for storing processed tfidf embedding
         self.date_str = f'{str(min_date.date())}_{str(max_date.date())}'
-        self.tfidf_embedding_dir = os.path.join(
-            os.path.dirname(os.path.realpath(__file__)), 'tfidf'
-            )
+        self.tfidf_embedding_dir = os.path.join(self.save_dir_path, 'tfidf')
         if not os.path.exists(self.tfidf_embedding_dir):
             os.makedirs(self.tfidf_embedding_dir)
 
-    def _load_target(self):
+    def rm_cache(self) -> None:
+        # remove cached tfidf df
+        os.rmdir(self.tfidf_embedding_dir)
+
+    def _load_target(self) -> None:
         target = pd.read_parquet(
             os.path.join(self.save_dir_path, 'target_df.parquet.gzip')
             )
-        self.target = target.set_index('date')
+        start_date = str(self.min_date.date())
+        end_date = str(self.max_date.date())
+        self.target = target.sort_values('date').set_index('date')[start_date: end_date]
 
-    def _load_bert_embeddings(self):
+    def _load_bert_embeddings(self) -> None:
+        """load news title embedding, it is called bert_embedding following paper but the acutal
+            model is all-MiniLM-L6-v2
+        """
         bert_embedding = pd.read_parquet(
             os.path.join(self.save_dir_path, 'sentence_embedding_df.parquet.gzip')
             )
@@ -214,21 +208,6 @@ class ModelDataPrep:
         Returns:
             Dict[str, np.array]: key of news id and value of news tfidf embeddings
         """
-        # training period data
-        tfidf_news_files = self._news_file_filter(
-            min_date=start_date,
-            max_date=end_date
-            )
-        input_data = embedding_batch_preprocessing(paths=tfidf_news_files)
-        tfidf_corpus = [e[2] for e in input_data if e[2] is not None]
-        tfidf_news_id = [e[1] for e in input_data if e[2] is not None]
-
-        vectorizer = TfidfVectorizer(
-            min_df=self.min_df,
-            stop_words=STOPWORDS,
-            dtype=np.float32
-            )
-        X = vectorizer.fit_transform(tfidf_corpus)
         tfidf_df_path = os.path.join(
             self.tfidf_embedding_dir, f'tfidf_{self.date_str}.parquet.gzip'
             )
@@ -237,10 +216,27 @@ class ModelDataPrep:
         if os.path.exists(tfidf_df_path):
             return pd.read_parquet(tfidf_df_path)
 
+        # training period data
+        tfidf_news_files = self._news_file_filter(
+            min_date=start_date,
+            max_date=end_date
+            )
+        input_data = embedding_batch_preprocessing(paths=tfidf_news_files)
+        tfidf_corpus = [text_preprocessing(e[2]) for e in input_data if e[2] is not None]
+        news_ids = [e[1] for e in input_data if e[2] is not None]
+
+        vectorizer = TfidfVectorizer(
+            min_df=self.min_df,
+            stop_words=STOPWORDS,
+            dtype=np.float32,
+            norm='l1'
+            )
+        X = vectorizer.fit_transform(tfidf_corpus)
+
         out = tfidf_weighted_embedding(
             x=X,
             trained_vecterizer=vectorizer,
-            news_id=tfidf_news_id
+            news_id=news_ids
             )
         results = self._tfidf_to_df(out)
         # save results to file
@@ -260,13 +256,17 @@ class ModelDataPrep:
         return embedding
 
     def _get_bert_vector(self, start_date: datetime, end_date: datetime) -> pd.DataFrame:
+        """fetch sentence embedding for given date range
+        """
         start_date = str(start_date.date())
         end_date = str(end_date.date())
 
         return self.bert_embedding[start_date: end_date]
 
     @lazyproperty
-    def bert_df(self) -> pd.DataFrame:
+    def sentence_embedding_df(self) -> pd.DataFrame:
+        """sentence embedding for given date range
+        """
         out = self._get_bert_vector(
             start_date=self.min_date,
             end_date=self.max_date
@@ -274,23 +274,14 @@ class ModelDataPrep:
 
         return out
 
-    def _get_target(self, start_date: datetime, end_date: datetime) -> pd.DataFrame:
-        start_date = str(start_date.date())
-        end_date = str(end_date.date())
-
-        return self.target[start_date: end_date]
-
-    @lazyproperty
-    def target(self) -> pd.DataFrame:
-        out = self._get_target(
-            start_date=self.min_date,
-            end_date=self.max_date
-            )
-
-        return out
-
     def prep_raw_model_data(self) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-        embedding_df = self.bert_df.reset_index() \
+        """merge sentence embedding and tfidf embedding by news uuid as input data
+
+        Returns:
+            Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]: training data tuple
+        """
+        embedding_df = self.sentence_embedding_df \
+            .reset_index() \
             .merge(self.tfidf_df, on='news_id', how='inner') \
             .sort_values('date') \
             .set_index('date')
@@ -299,11 +290,17 @@ class ModelDataPrep:
 
     @lazyproperty
     def trading_date(self) -> List[datetime]:
+        """unique trading date based on stock movement df
+        """
         return to_date(self.target.index.unique().sort_values())
 
     @lazyproperty
-    def news_date(self):
-        return to_date(self.bert_df.index.unique().sort_values())
+    def news_date(self) -> List[datetime]:
+        """dates with news
+        """
+        result = to_date(self.sentence_embedding_df.index.unique().sort_values())
+
+        return result
 
     @staticmethod
     def _fetch_embeddings(
@@ -325,25 +322,32 @@ class ModelDataPrep:
         """
         out = {}
         for td in trading_dates:
-            nd = [e for e in news_dates if 0 <= (e - td).days <= (days_lookback - 1)]
+            nd = [e for e in news_dates if 0 <= (td - e).days <= (days_lookback - 1)]
             if len(nd) != 5:
                 continue
             # fetch newes
+            tmp_bert = []
+            tmp_tfidf = []
             min_date = str(min(nd))
             max_date = str(max(nd))
-            tmp_df = embedding_df[min_date: max_date]
-            sentence_embedding = tmp_df.filter(regex='^c', axis=1).sort_index().groupby('date')
-            tfidf_embedding = tmp_df.filter(regex='^f', axis=1).sort_index().groupby('date')
-            tmp_bert = []
-            sentence_max_news = max([len(e) for e in dict(list(sentence_embedding)).values()])
-            for _, d in sentence_embedding:
-                # need to pad to the longest number of news in the neighboring days
-                d = d.reset_index(drop=True).reindex(range(sentence_max_news), fill_value=0)
-                tmp_bert.append(d.to_numpy().tolist())
-            tmp_tfidf = []
-            for _, d in tfidf_embedding:
-                d = d.reset_index(drop=True).reindex(range(sentence_max_news), fill_value=0)
-                tmp_tfidf.append(d.to_numpy().tolist())
+            tmp_df = embedding_df[min_date: max_date].sort_index().groupby('date')
+            max_news_cnt = max([len(e) for e in dict(list(tmp_df)).values()])
+
+            for _, d in tmp_df:
+                tmp_sentence_embedding = d \
+                    .filter(regex='^c', axis=1) \
+                    .reset_index(drop=True) \
+                    .reindex(range(max_news_cnt), fill_value=0)
+                tmp_bert.append(tmp_sentence_embedding.to_numpy().tolist())
+
+                tmp_tfidf_embedding = d \
+                    .filter(regex='^f', axis=1) \
+                    .reset_index(drop=True) \
+                    .reindex(range(max_news_cnt), fill_value=0)
+                tmp_tfidf.append(tmp_tfidf_embedding.to_numpy().tolist())
+
+            if len(tmp_bert) != 5 or len(tmp_tfidf) != 5:
+                continue
 
             out[str(td)] = [np.array(tmp_bert), np.array(tmp_tfidf)]
 
@@ -374,7 +378,7 @@ class ModelDataPrep:
 
         def generator():
             for se, te, t, l in zip(sentence_embeddings, tfidf_embeddings, ticker, label):
-                if se is not None:
+                if se is not None and te is not None:
                     yield (se, te, t), l
 
         # .shuffle(buffer_size=1000, seed=seed_value)
@@ -391,8 +395,16 @@ class ModelDataPrep:
 
         return dataset
 
-    def random_split_data(self, seed: int) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        """randomly split dates
+    def random_split_data_by_date(
+        self,
+        training_proportion: float = 0.8,
+        seed: Optional[int] = None
+        ) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """randomly split data by dates
+
+        Args:
+            training_proportion (float, optional): training sample proportion. Defaults to 0.8.
+            seed (Optional[int], optional): RNG seed. Defaults to None.
 
         Returns:
             Tuple[pd.DataFrame, pd.DataFrame]: training and validation target df
@@ -401,10 +413,12 @@ class ModelDataPrep:
         # all trading date
         all_trading_dates = target_df.index.unique().to_list()
         # sample training trading dates
-        np.random.seed(seed)
+        if seed is not None:
+            np.random.seed(seed)
+
         train_dates = np.random.choice(
             all_trading_dates,
-            size=int(0.8 * len(all_trading_dates)),
+            size=int(training_proportion * len(all_trading_dates)),
             replace=False
             )
 
@@ -416,26 +430,61 @@ class ModelDataPrep:
 
         return train_target, valid_target
 
+    def random_split_data(
+        self,
+        training_proportion: float = 0.8,
+        seed: Optional[int] = None
+        ) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """randomly split data
+
+        Args:
+            training_proportion (float, optional): training sample proportion. Defaults to 0.8.
+            seed (Optional[int], optional): RNG seed. Defaults to None.
+
+        Returns:
+            Tuple[pd.DataFrame, pd.DataFrame]: training and validation target df
+        """
+        _, target_df = self.prep_raw_model_data()
+        train_target = target_df \
+            .sample(frac=training_proportion, random_state=seed) \
+            .sample(frac=1, random_state=seed) # randomize training df
+
+        valid_target = pd_anti_join(
+            df1=target_df.reset_index(),
+            df2=train_target.reset_index()
+            ).set_index('date')
+
+        logger.info(f'training target len: {len(train_target)}')
+        logger.info(f'validation target len: {len(valid_target)}')
+
+        return train_target, valid_target
+
     def create_dataset(
         self,
         days_lookback: int = 5,
         batch_size: int = 32,
-        seed_value: int = 42
+        seed_value: Optional[int] = None,
+        split_method: str = 'random'
         ) -> Tuple[PaddedBatchDataset, PaddedBatchDataset]:
         """create modeling dataset
 
         Args:
             split_method (str): how to split data into training and validation
-            days_lookback (int, optional): _description_. Defaults to 5.
-            batch_size (int, optional): _description_. Defaults to 32.
-            seed (int, optional): _description_. Defaults to 42.
+            days_lookback (int, optional): number of days for news to include. Defaults to 5.
+            batch_size (int, optional): batch size. Defaults to 32.
+            seed_value (Optional[int], optional): RNG seed. Defaults to 42.
+            split_method(str, optional):
 
         Returns:
             Tuple[PaddedBatchDataset, PaddedBatchDataset]: training and validation dataset
         """
         embedding_df, _ = self.prep_raw_model_data()
 
-        train_target_random, valid_target_random = self.random_split_data(seed=seed_value)
+        if split_method == 'random':
+            train_target_random, valid_target_random = self.random_split_data(seed=seed_value)
+        else:
+            train_target_random, valid_target_random = self.random_split_data_by_date(seed=seed_value)
+
         embedding_lookup = self._fetch_embeddings(
             trading_dates=self.trading_date,
             news_dates=self.news_date,
@@ -453,63 +502,29 @@ class ModelDataPrep:
             batch_size=batch_size
             )
 
+        # for full training dataset
+        self.embedding_loopup = embedding_lookup
+        self.days_lookback = days_lookback
+        self.batch_size = batch_size
+
         return training_dataset, validation_dataset
 
+    def create_single_dataset(
+        self,
+        ) -> PaddedBatchDataset:
+        """create signle training dataset with all dates
 
-if __name__ == '__main__':
-    dm = DateManager(
-        reuters_news_path='/home/timnaka123/Documents/financial-news-dataset/ReutersNews106521',
-        bloomberg_news_path='/home/timnaka123/Documents/financial-news-dataset/bloomberg'
-        )
-    t_start_date, v_start_date, v_end_date = dm.get_model_date(2, 1)
+        Returns:
+            PaddedBatchDataset: training dataset with all dates
+        """
+        _, target_df = self.prep_raw_model_data()
 
-    mdp = ModelDataPrep(
-        news_path='/home/timnaka123/Documents/financial-news-dataset/ReutersNews106521',
-        save_dir_path='/home/timnaka123/Documents/stock_embedding_nlp/src/data',
-        training_start_date=t_start_date,
-        validation_start_date=v_start_date,
-        validation_end_date=v_end_date
-    )
+        dataset = self._create_dataset(
+            label_df=target_df,
+            embedding_lookup=self.embedding_lookup,
+            batch_size=self.batch_size
+            )
 
-    train_df, train_target, valid_df, valid_target = mdp.prep_raw_model_data()
-
-    out = {}
-    for td in mdp.training_trading_date:
-        nd = [e for e in mdp.training_news_date if 0 <= (e - td).days <= 4]
-        if len(nd) != 5:
-            continue
-        # fetch newes
-        min_date = str(min(nd))
-        max_date = str(max(nd))
-        tmp_df = train_df[min_date: max_date]
-        bert_embedding = tmp_df.filter(regex='^c', axis=1).groupby('date')
-        tfidf_embedding = tmp_df.filter(regex='^f', axis=1).groupby('date')
-        tmp_bert = []
-        bert_max_news = max([len(e) for e in dict(list(bert_embedding)).values()])
-        for _, d in bert_embedding:
-            # need to pad to the longest number of news in the neighboring days
-            d = d.reset_index(drop=True).reindex(range(bert_max_news ), fill_value=0)
-            tmp_bert.append(d.to_numpy().tolist())
-        tmp_tfidf = []
-        for _, d in tfidf_embedding:
-            d = d.reset_index(drop=True).reindex(range(bert_max_news ), fill_value=0)
-            tmp_tfidf.append(d.to_numpy().tolist())
-
-        out[str(td)] = [np.array(tmp_bert), np.array(tmp_tfidf)]
-
-    label_df = train_target
-    embedding_lookup = out
-
-
-    from src.data.stock_data import get_tickers
-
-    tickers = get_tickers(
-        dir_path='/home/timnaka123/Documents/stock_embedding_nlp/src/data/',
-        obj_name='qualified_tickers.pickle'
-    )
-    # use a tuple to create features and label
-    f1, f2, labels = (np.random.sample((100,2)), np.random.choice(tickers, 100), np.random.sample((100,1)))
-    dataset = tf.data.Dataset.from_tensor_slices(((f1, f2),labels))
-
+        return dataset
 
 

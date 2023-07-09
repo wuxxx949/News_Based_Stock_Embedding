@@ -1,15 +1,17 @@
 import multiprocessing as mp
+import os
 from functools import reduce
 from typing import List, Optional
-import fasttext
 
+import fasttext
 import numpy as np
 from scipy.sparse import csr_matrix
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 from src.data.utils import STOPWORDS
+from src.meta_data import get_meta_data
 
-bin_file='/home/timnaka123/Documents/stock_embedding_nlp/src/data/news.bin'
+bin_file=os.path.join(get_meta_data()['SAVE_DIR'], 'news.bin')
 # cannot pickle fasttext object in MP so make it global
 model = fasttext.load_model(path=str(bin_file))
 
@@ -17,7 +19,7 @@ model = fasttext.load_model(path=str(bin_file))
 def _tfidf_weighted_embedding(
     x: csr_matrix,
     news_id: List[str],
-    vectorizer
+    vectorizer: TfidfVectorizer
     ):
     """note that some news may have all 0 in the sparse matrix depends on min_df input
     """
@@ -26,30 +28,27 @@ def _tfidf_weighted_embedding(
     # i = 0
     i = nonzero_idx[0][0]
     results = {}
-    tmp_tfidf_wt = []
     tmp_embedding = 0
     for idx in nonzero_idx:
         if idx[0] > i:
-            results[news_id[i]] = tmp_embedding / sum(tmp_tfidf_wt)
+            results[news_id[i]] = tmp_embedding
             # reset
             i = idx[0]
-            tmp_tfidf_wt = []
             tmp_embedding = 0
 
         w = vectorizer.get_feature_names_out()[idx[1]]
         tfidf = x[idx]
-        tmp_tfidf_wt.append(tfidf)
         tmp_embedding += tfidf * model.get_word_vector(w)
 
     # attach the last row
-    results[news_id[i]] = tmp_embedding / sum(tmp_tfidf_wt)
+    results[news_id[i]] = tmp_embedding
 
     return results
 
 
 def tfidf_weighted_embedding(
     x: csr_matrix,
-    trained_vecterizer,
+    trained_vecterizer: TfidfVectorizer,
     news_id: List[str],
     ncores: Optional[int] = None,
     batch_size: int = 500,

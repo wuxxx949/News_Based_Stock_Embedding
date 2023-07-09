@@ -9,18 +9,18 @@ from sklearn import decomposition
 
 from src.data.utils import (create_uuid_from_string, get_path,
                             headline_processing, longest_line, pickle_results)
+from src.meta_data import get_meta_data
 
 
-def get_news_path(reuters_dir: str, bloomberg_dir: str) -> List[str]:
+def get_news_path() -> List[str]:
     """fetch path for all news sources
-
-    Args:
-        reuters_dir (str): Reuters news directory
-        bloomberg_dir (str): Bloomberg news directory
 
     Returns:
         List[str]: list of paths
     """
+    meta_data = get_meta_data()
+    reuters_dir = meta_data['REUTERS_DIR']
+    bloomberg_dir = meta_data['BLOOMBERG_DIR']
     return get_path(reuters_dir) + get_path(bloomberg_dir)
 
 
@@ -126,7 +126,6 @@ def generate_embedding(
     all_paths: List[str],
     tokenizer,
     model,
-    save_dir_path: str,
     max_len: int,
     batch_size: int = 1000,
     ) -> Tuple[np.ndarray, List[str], List[str]]:
@@ -136,12 +135,12 @@ def generate_embedding(
         all_pathes (List[str]): _description_
         tokenizer (_type_): _description_
         model (_type_): _description_
-        save_dir_path (str): _description_
         batch_size (int, optional): _description_. Defaults to 40.
 
     Returns:
         Tuple[np.ndarray, List[str], List[str]]: news embedding, date, and news id
     """
+    save_dir_path = get_meta_data()['SAVE_DIR']
     results = []
     text_input = embedding_batch_preprocessing(all_paths)
 
@@ -172,7 +171,6 @@ def bert_compression(
     embedding_array: np.ndarray,
     news_date: List[str],
     news_id: List[str],
-    save_dir_path: str,
     n_component: int = 256
     ) -> pd.DataFrame:
     """apply PCA to reduce dimension
@@ -183,6 +181,7 @@ def bert_compression(
     Returns:
         pd.DataFrame: PCA embedding
     """
+    save_dir_path = get_meta_data()['SAVE_DIR']
     pca = decomposition.PCA(n_components=n_component)
     pca_array =  pca.fit_transform(embedding_array)
     pca_cols = ['c' + str(i) for i in range(n_component)]
@@ -198,29 +197,8 @@ def bert_compression(
 
 
 if __name__ == '__main__':
-    from transformers import BertTokenizer, TFBertModel
-
-    rdir = '/home/timnaka123/Documents/financial-news-dataset/ReutersNews106521'
-    bdir = '/home/timnaka123/Documents/financial-news-dataset/bloomberg'
-    headline_path = '/home/timnaka123/Documents/stock_embedding_nlp/src/data/headlines.txt'
-    max_headline = longest_line(headline_path)
-
-    all_paths = get_news_path(reuters_dir=rdir, bloomberg_dir=bdir)
-
-    tokenizer = BertTokenizer.from_pretrained('bert-large-uncased')
-    model = TFBertModel.from_pretrained("bert-large-uncased")
-
-    embedding_array, news_date, news_id = generate_embedding(
-        all_pathes = all_paths,
-        tokenizer=tokenizer,
-        model=model,
-        max_len=max_headline,
-        save_dir_path='/home/timnaka123/Documents/stock_embedding_nlp/src/data/'
-        )
-
-    pca_df = bert_compression(
-        embedding_array=embedding_array,
-        news_date=news_date,
-        news_id=news_id,
-        save_dir_path='/home/timnaka123/Documents/stock_embedding_nlp/src/data/'
-        )
+    from src.data.utils import sample_news, get_raw_news, headline_preprocessing
+    path = sample_news(os.environ['REUTERS_DIR'])
+    print(single_file_process(path))
+    print(headline_preprocessing(single_file_process(path)))
+    print(get_raw_news(path))
