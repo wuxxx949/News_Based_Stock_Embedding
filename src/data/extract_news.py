@@ -45,17 +45,14 @@ def break_sentence(text: str) -> str:
     return"\n".join(sentences)
 
 
-def reuters_single_file_process(
-    path: str,
-    rm_punctuation: bool
-    ) -> Tuple[List[str], str]:
-    """find all matched ticker in a Reuters news and fetch headline
+def reuters_single_file_process(path: str) -> Tuple[List[str], str]:
+    """find all matched ticker in a Reuters news and fetch news
 
     Args:
         path (str): path of a single Reuters news file
 
     Returns:
-        Tuple[List[str], str]: ticker(s) mentioned in the news and
+        Tuple[List[str], str]: ticker(s) mentioned in the news and news text
     """
     try:
         with open(path, 'r', encoding="utf8") as f:
@@ -106,17 +103,14 @@ def reuters_single_file_process(
     return matched, news_text
 
 
-def bloomberg_single_file_process(
-    path: str,
-    rm_punctuation: bool
-    ) -> Tuple[List[str], str]:
-    """find all matched ticker in bloomberg news and fetch headline
+def bloomberg_single_file_process(path: str) -> Tuple[List[str], str]:
+    """find all matched ticker in bloomberg news and fetch news
 
     Args:
         path (str): path of a single Bloomberg news file
 
     Returns:
-        List[str]: ticker(s) mentioned in the news
+        List[str]: ticker(s) mentioned in the news and news text
     """
     try:
         with open(path, 'r', encoding="utf8") as f:
@@ -169,8 +163,7 @@ def bloomberg_single_file_process(
 
 def single_file_process(
     news_type: str,
-    path: str,
-    rm_punctuation: bool
+    path: str
     ) -> Tuple[List[str], str]:
     """process a single Reuters or Bloomberg news file
 
@@ -184,37 +177,30 @@ def single_file_process(
     """
     try:
         if news_type == 'r':
-            matched, headline = reuters_single_file_process(path, rm_punctuation)
+            matched, news_text = reuters_single_file_process(path)
         else:
-            matched, headline = bloomberg_single_file_process(path, rm_punctuation)
+            matched, news_text = bloomberg_single_file_process(path)
     except Exception as e:
         print(f'{path}: {e}')
-        matched, headline = [], ''
+        matched, news_text = [], ''
 
-    return matched, headline
+    return matched, news_text
 
 
 if __name__ == '__main__':
     from src.data.utils import get_raw_news, sample_news
+    from src.meta_data import get_meta_data
 
     # test reuters path
-    file = 'us-aig-idUSTRE62E0GQ20100315'
-    folder = '/home/timnaka123/Documents/financial-news-dataset/ReutersNews106521/20100315'
-    path = sample_news('/home/timnaka123/Documents/financial-news-dataset/ReutersNews106521/')
-    # path = '/home/timnaka123/Documents/financial-news-dataset/ReutersNews106521/20111213/us-markets-stocks-idUSTRE7AO0B420111213'
-    # path = os.path.join(folder, file)
-    out = reuters_single_file_process(path, False)
+    path = sample_news(get_meta_data()['REUTERS_DIR'])
+    out = reuters_single_file_process(path)
     print(get_raw_news(path))
     print(out[0])
     print(out[1])
 
     # test bloomberg path
-    bb_folder = '/home/timnaka123/Documents/financial-news-dataset/bloomberg/2011-01-26'
-    file = 'federal-open-market-committee-s-statement-on-monetary-policy-full-tex'
-    # bb_folder = '/home/timnaka123/Documents/financial-news-dataset/bloomberg/2011-09-26'
-    # file = 'apple-cuts-ipad-supply-chain-orders-jpmorgan'
-    path = sample_news('/home/timnaka123/Documents/financial-news-dataset/bloomberg/')
-    out = bloomberg_single_file_process(path, False)
+    path = sample_news(get_meta_data()['BLOOMBERG_DIR'])
+    out = bloomberg_single_file_process(path)
     print(get_raw_news(path))
     print(out[0])
     print(out[1])

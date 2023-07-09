@@ -186,7 +186,7 @@ def text_preprocessing(text: str):
         text (str): news headline
     """
     # rm non-alphabetical
-    s = re.sub(r'[^a-zA-Z0-9]', ' ', text.lower())
+    s = re.sub(r'[^a-zA-Z]', ' ', text.lower())
     # at most one space
     s = re.sub(r' +', ' ', s)
     # rm single letter

@@ -2,6 +2,7 @@
 import collections
 import multiprocessing as mp
 import os
+from multiprocessing.managers import AutoProxy
 
 import fasttext
 
@@ -10,14 +11,10 @@ from src.data.utils import get_news_path, pickle_results
 from src.meta_data import get_meta_data
 
 
-def worker(news_type, path, rm_punctuation, q):
+def worker(news_type: str, path: str, q: AutoProxy):
     """single file
     """
-    matched, text = single_file_process(
-        news_type=news_type,
-        path=path,
-        rm_punctuation=rm_punctuation
-        )
+    matched, text = single_file_process(news_type=news_type, path=path)
     if len(text) > 0:
         q.put(text)
 
@@ -36,12 +33,11 @@ def text_listener(q, fp):
             f.flush()
 
 
-def news_preprocessing(rm_punctuation: bool = False) -> None:
+def news_preprocessing() -> None:
     """apply mp to process all files
 
     Args:
         tickers (List[str]): target tickers
-        rm_punctuation (bool, optional): if remove punctuation in the headline. Defaults to False.
     """
     save_dir_path = get_meta_data()['SAVE_DIR']
     all_files = get_news_path(
@@ -61,7 +57,7 @@ def news_preprocessing(rm_punctuation: bool = False) -> None:
     for f in all_files:
         news_type = f[1]
         news_path = f[0]
-        job = pool.apply_async(worker, (news_type, news_path, rm_punctuation, q))
+        job = pool.apply_async(worker, (news_type, news_path, q))
         jobs.append(job)
 
     for job in jobs:
@@ -92,4 +88,4 @@ def train_word_embedding(dim: int=64, **kargs) -> None:
 
 if __name__ == '__main__':
     news_preprocessing()
-    train_word_embedding(epoch=5)
+    train_word_embedding(epoch=10)
