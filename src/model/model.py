@@ -44,13 +44,12 @@ class NewsAttention(tf.keras.layers.Layer):
 
 def get_model(
     tickers: List[str],
-    learning_rate: float = 0.0005
+    kwargs
     ) -> Tuple[Functional, TextVectorization, Embedding]:
     """model architecture
 
     Args:
         tickers (List[str]): unique tickers
-        learning_rate (float, optional): learning rate for Nadam. Defaults to 0.0005.
 
     Returns:
         Functional: model object
@@ -78,7 +77,7 @@ def get_model(
 
     # time series layer with optional temporal attention
     ts_layer = tf.keras.layers.Bidirectional(
-        tf.keras.layers.GRU(64, return_sequences=True) # return sequences as h_tau
+        tf.keras.layers.GRU(32, return_sequences=True) # return sequences as h_tau
         )
     # h is defined in Equation (4)
     htau = ts_layer(market_embeddings)
@@ -89,8 +88,9 @@ def get_model(
     vh = [tf.matmul(htau[:, i, :], tf.transpose(tf.expand_dims(v_vec[i], axis=0))) for i in range(5)]
     tensors_stacked = tf.stack(vh, axis=1) # shape=(None, 5, 1)
     beta_tau = tf.nn.softmax(tensors_stacked, axis=1) # shape=(None, 5, 1)
-    ho= tf.reduce_sum(htau * beta_tau, axis=1)  # shape: (None, 256)
+    ho = tf.reduce_sum(htau * beta_tau, axis=1)  # shape: (None, 256)
 
+    # ho = ts_layer(market_embeddings)
     # MLP for prediction
     output_layer = tf.keras.layers.Dense(1, activation="sigmoid")
     Y_proba = output_layer(ho)
@@ -99,11 +99,7 @@ def get_model(
         inputs=[context_embedding, word_embedding, ticker_inputs],
         outputs=[Y_proba]
         )
-    lr_fn = tf.keras.optimizers.schedules.CosineDecay(
-        initial_learning_rate=1e-4,
-        alpha=0.01,
-        decay_steps=500
-    )
+    lr_fn = tf.keras.optimizers.schedules.CosineDecay(**kwargs)
     optimizer = tf.keras.optimizers.Adam(learning_rate=lr_fn)
     # tf.keras.optimizers.schedules.CosineDecay
 
@@ -138,26 +134,30 @@ def extract_ticker_embedding(
 
 
 if __name__ == '__main__':
-    from src.data.utils import pickle_results
     from src.model.prepare_training_data import DateManager, ModelDataPrep
     from src.meta_data import get_meta_data
     tickers = pd.read_parquet(
         os.path.join(get_meta_data()['SAVE_DIR'], 'target_df.parquet.gzip')
         )['ticker'].unique()
 
-    model, ticker_vec, ticker_embedding = get_model(tickers=tickers, learning_rate=0.0002)
+    model, ticker_vec, ticker_embedding = get_model(
+        tickers=tickers,
+        initial_learning_rate=5e-4,
+        alpha=0.99,
+        decay_steps=1000
+        )
 
     dm = DateManager()
 
-    start_date, end_date = dm.get_date_range(data_len=3)
+    start_date, end_date = dm.get_date_range(data_len=7)
 
     mdp = ModelDataPrep(
         min_date=start_date,
         max_date=end_date,
-        min_df=0.0001
+        min_df=0.001
         )
-    training_ds, validation_ds = mdp.create_dataset(seed_value=28, batch_size=64)
-    early_stop = EarlyStopping(monitor='val_loss', patience=10)
+    training_ds, validation_ds = mdp.create_dataset(seed_value=42, batch_size=64)
+    early_stop = EarlyStopping(monitor='val_accuracy', patience=10)
 
     hisotry = model.fit(
         training_ds,
