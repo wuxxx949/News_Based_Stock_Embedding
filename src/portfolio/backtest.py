@@ -54,6 +54,7 @@ class BackTest:
         initial_learning_rate: float,
         alpha: float,
         decay_steps: int,
+        use_es: bool = False,
         patience: int = 5
         ) -> Tuple[List[float], List[float], List[float], List[float]]:
         """run a single training, validation with randomly splitted data
@@ -63,6 +64,7 @@ class BackTest:
             initial_learning_rate (float): initial learning rate for cosine decay lr scheduler
             alpha (float): alpha for cosine decay lr scheduler
             decay_steps (int): decay steps for cosine decay lr scheduler
+            use_es (bool): if use early stop in training
             patience (int): patience for early stop
 
         Returns:
@@ -80,16 +82,24 @@ class BackTest:
         start_date, end_date = self.dm.get_date_range(data_len=length)
         mdp = ModelDataPrep(min_date=start_date, max_date=end_date)
         training_ds, validation_ds = mdp.create_dataset(batch_size=64, seed_value=None)
-        early_stop = EarlyStopping(
-            monitor='val_loss',
-            patience=patience
-            )
-        hisotry = model.fit(
-            training_ds,
-            validation_data=validation_ds,
-            epochs=40,
-            callbacks=[early_stop]
-            )
+        if use_es:
+            early_stop = EarlyStopping(
+                monitor='val_accuracy',
+                patience=patience
+                )
+            hisotry = model.fit(
+                training_ds,
+                validation_data=validation_ds,
+                epochs=40,
+                callbacks=[early_stop]
+                )
+        else:
+            hisotry = model.fit(
+                training_ds,
+                validation_data=validation_ds,
+                epochs=40
+                )
+
         training_loss = hisotry.history['loss']
         val_loss = hisotry.history['val_loss']
         training_accuracy = hisotry.history['accuracy']
@@ -184,7 +194,7 @@ class BackTest:
     def run_training_pipeline(self) -> None:
         """train model on various length
         """
-        for i in range(3, 5):
+        for i in range(4, 5):
             train_out = self.run_multiple_training_validation(
                 n=3,
                 length=i,
