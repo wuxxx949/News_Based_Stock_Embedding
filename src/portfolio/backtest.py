@@ -24,7 +24,7 @@ class BackTest:
         self.meta_data = get_meta_data()
         self.tickers = pd.read_parquet(
             os.path.join(self.meta_data['SAVE_DIR'], 'target_df.parquet.gzip')
-            )
+            )['ticker'].unique()
         self.model_history = {}
         self.portfolio_performance = {}
         self.dm = DateManager()
@@ -181,3 +181,22 @@ class BackTest:
 
         return embedding_dict
 
+    def run_training_pipeline(self) -> None:
+        """train model on various length
+        """
+        for i in range(3, 5):
+            train_out = self.run_multiple_training_validation(
+                n=3,
+                length=i,
+                initial_learning_rate=5e-4,
+                alpha=0.3,
+                decay_steps=2000,
+                patience=10
+                )
+            self.model_history[i] = train_out
+
+
+
+if __name__=='__main__':
+    bt = BackTest()
+    bt.run_training_pipeline()
