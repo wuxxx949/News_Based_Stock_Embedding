@@ -1,5 +1,5 @@
 import os
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -32,18 +32,24 @@ class BackTest:
     @staticmethod
     def _process_history(
         val_loss: List[float],
-        val_accuracy: List[float]
+        val_accuracy: List[float],
+        use_accuracy: bool = True
         ) -> Tuple[float, int]:
         """find the accuracy corresponding to best val loss
 
         Args:
             val_loss (List[float]): validation loss from training history
             val_accuracy (List[float]): validation accuracy from training history
+            use_accuracy (bool):
 
         Returns:
             Tuple[float, int]: validation accuracy and associated iteration
         """
-        arg_min = np.array(val_loss).argmin()
+        if use_accuracy:
+            arg_min = np.array(val_accuracy).argmin()
+        else:
+            arg_min = np.array(val_loss).argmin()
+
         val_acc = val_accuracy[arg_min]
 
         return val_acc, arg_min
@@ -55,7 +61,7 @@ class BackTest:
         alpha: float,
         decay_steps: int,
         use_es: bool = False,
-        patience: int = 5
+        patience: Optional[int] = None
         ) -> Tuple[List[float], List[float], List[float], List[float]]:
         """run a single training, validation with randomly splitted data
 
@@ -64,8 +70,8 @@ class BackTest:
             initial_learning_rate (float): initial learning rate for cosine decay lr scheduler
             alpha (float): alpha for cosine decay lr scheduler
             decay_steps (int): decay steps for cosine decay lr scheduler
-            use_es (bool): if use early stop in training
-            patience (int): patience for early stop
+            use_es (bool, optional): if use early stop in training. Defaults to False.
+            patience (Optional[int], optional): patience for early stop. Defaults to None.
 
         Returns:
             Tuple[List[float], List[float], List[float], List[float]]: training loss,
@@ -114,7 +120,8 @@ class BackTest:
         initial_learning_rate: float,
         alpha: float,
         decay_steps: int,
-        patience: int
+        use_es: bool = False,
+        patience: Optional[int] = None
         ) -> Tuple[List[float], List[int]]:
         """run model on multiple randomly split training and validation datasets
 
@@ -124,7 +131,8 @@ class BackTest:
             initial_learning_rate (float): initial learning rate for cosine decay lr scheduler
             alpha (float): alpha for cosine decay lr scheduler
             decay_steps (int): decay steps for cosine decay lr scheduler
-            patience (int): patience for early stop
+            use_es (bool, optional): if use early stop in training. Defaults to False.
+            patience (Optional[int], optional): patience for early stop. Defaults to None.
 
         Returns:
             Tuple[List[float], List[int]]: max validation accuracies and assoicated iterations
@@ -138,6 +146,7 @@ class BackTest:
                 initial_learning_rate=initial_learning_rate,
                 alpha=alpha,
                 decay_steps=decay_steps,
+                use_es=use_es,
                 patience=patience
                 )
 
@@ -194,14 +203,13 @@ class BackTest:
     def run_training_pipeline(self) -> None:
         """train model on various length
         """
-        for i in range(4, 5):
+        for i in range(3, 5):
             train_out = self.run_multiple_training_validation(
                 n=3,
                 length=i,
                 initial_learning_rate=5e-4,
-                alpha=0.3,
-                decay_steps=2000,
-                patience=10
+                alpha=0.5,
+                decay_steps=2000
                 )
             self.model_history[i] = train_out
 
