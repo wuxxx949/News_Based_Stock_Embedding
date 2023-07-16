@@ -6,36 +6,55 @@ import pandas as pd
 import tensorflow as tf
 from tensorflow.keras.callbacks import EarlyStopping
 
+from src.logger import setup_logger
 from src.meta_data import get_meta_data
 from src.model.model import extract_ticker_embedding, get_model
 from src.model.prepare_training_data import DateManager, ModelDataPrep
 from src.portfolio.portfolio_construction import PortfolioConstruction
 
+logger = setup_logger(logger_name='bt', log_file='backtest.log')
+
 
 class BackTest:
-    def __init__(self, n_rep: int) -> None:
+    """test model prediction performance and portfolio return
+    """
+    def __init__(self) -> None:
         """constructor
-
-        Args:
-            n_rep (int): number of random split for backtesting
         """
         self.meta_data = get_meta_data()
-        self.tickers = pd.read_parquet(os.path.join(self.meta_data['SAVE_DIR'], 'target_df.parquet.gzip'))
+        self.tickers = pd.read_parquet(
+            os.path.join(self.meta_data['SAVE_DIR'], 'target_df.parquet.gzip')
+            )
         self.model_history = {}
         self.portfolio_performance = {}
         self.dm = DateManager()
 
-
     @staticmethod
-    def _process_history():
-        pass
+    def _process_history(
+        val_loss: List[float],
+        val_accuracy: List[float]
+        ) -> Tuple[float, int]:
+        """find the accuracy corresponding to best val loss
+
+        Args:
+            val_loss (List[float]): validation loss from training history
+            val_accuracy (List[float]): validation accuracy from training history
+
+        Returns:
+            Tuple[float, int]: validation accuracy and associated iteration
+        """
+        arg_min = np.array(val_loss).argmin()
+        val_acc = val_accuracy[arg_min]
+
+        return val_acc, arg_min
 
     def run_single_training_validation(
         self,
         length: int,
         initial_learning_rate: float,
         alpha: float,
-        decay_steps: int
+        decay_steps: int,
+        patience: int = 5
         ) -> Tuple[List[float], List[float], List[float], List[float]]:
         """run a single training, validation with randomly splitted data
 
@@ -44,6 +63,7 @@ class BackTest:
             initial_learning_rate (float): initial learning rate for cosine decay lr scheduler
             alpha (float): alpha for cosine decay lr scheduler
             decay_steps (int): decay steps for cosine decay lr scheduler
+            patience (int): patience for early stop
 
         Returns:
             Tuple[List[float], List[float], List[float], List[float]]: training loss,
@@ -62,8 +82,7 @@ class BackTest:
         training_ds, validation_ds = mdp.create_dataset(batch_size=64, seed_value=None)
         early_stop = EarlyStopping(
             monitor='val_loss',
-            patience=5,
-            start_from_epoch=5
+            patience=patience
             )
         hisotry = model.fit(
             training_ds,
@@ -78,13 +97,59 @@ class BackTest:
 
         return training_loss, val_loss, training_accuracy, val_accuracy
 
+    def run_multiple_training_validation(
+        self,
+        n: int,
+        length: int,
+        initial_learning_rate: float,
+        alpha: float,
+        decay_steps: int,
+        patience: int
+        ) -> Tuple[List[float], List[int]]:
+        """run model on multiple randomly split training and validation datasets
+
+        Args:
+            n (int): number of repetitions
+            length (int): number of years of data to use
+            initial_learning_rate (float): initial learning rate for cosine decay lr scheduler
+            alpha (float): alpha for cosine decay lr scheduler
+            decay_steps (int): decay steps for cosine decay lr scheduler
+            patience (int): patience for early stop
+
+        Returns:
+            Tuple[List[float], List[int]]: max validation accuracies and assoicated iterations
+        """
+        result_max_acc = []
+        result_min_iter = []
+        logger.info(f"Run multiple training validation using {length} years data {'-' * 20}")
+        for i in range(n):
+            out = self.run_single_training_validation(
+                length=length,
+                initial_learning_rate=initial_learning_rate,
+                alpha=alpha,
+                decay_steps=decay_steps,
+                patience=patience
+                )
+
+            val_acc, arg_min = self._process_history(val_loss=out[1], val_accuracy=out[3])
+            result_max_acc.append(val_acc)
+            result_min_iter.append(arg_min)
+
+            logger.info(f"training loss on iter {i}: {out[0]}")
+            logger.info(f"validatoin loss on iter {i}: {out[1]}")
+            logger.info(f"training accuracy on iter {i}: {out[2]}")
+            logger.info(f"validatoin accuracy on iter {i}: {out[3]}")
+
+        return result_max_acc, result_min_iter
+
     def run_full_data_training(
         self,
         length: int,
         epochs: int,
         initial_learning_rate: float,
         alpha: float,
-        decay_steps: int        ) -> Dict[str, np.array]:
+        decay_steps: int
+        ) -> Dict[str, np.array]:
         """train model on full dataset and extract stock embeddings
 
         Args:
