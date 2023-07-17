@@ -28,6 +28,8 @@ class BackTest:
         self.model_history = {}
         self.portfolio_performance = {}
         self.dm = DateManager()
+        # expected return in portfolio construction
+        self.exp_return = np.arange(0.05, 0.30, 0.01)
 
     @staticmethod
     def _process_history(
@@ -219,6 +221,7 @@ class BackTest:
     def run_backtest(self) -> None:
         # determine epochs
         self.run_training_pipeline()
+        bt_results = {}
 
         for i in range(3, 4):
             opt_epoch = int(np.array(self.model_history[i][1]).mean())
@@ -229,6 +232,14 @@ class BackTest:
                 alpha=0.5,
                 decay_steps=2000
                 )
+            _, end_date = self.dm.get_date_range(data_len=i)
+            pc = PortfolioConstruction(embedding_dict=embeddings, last_news_date=end_date)
+            tmp_return_lst = []
+            for r in self.exp_return:
+                tmp_return = pc.get_backtest_return(exp_return=r)
+                tmp_return_lst.append(tmp_return)
+            bt_results[i] = tmp_return
+            # TODO: make summary plot and save to folder
 
 
 if __name__=='__main__':
