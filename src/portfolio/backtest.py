@@ -191,8 +191,11 @@ class BackTest:
 
         start_date, end_date = self.dm.get_date_range(data_len=length)
         mdp = ModelDataPrep(min_date=start_date, max_date=end_date)
-        training_ds = mdp.create_single_dataset(batch_size=64)
-        _ = model.fit(training_ds, epochs=epochs)
+        training_ds = mdp.create_single_dataset()
+        history = model.fit(training_ds, epochs=epochs)
+
+        logger.info(f"training loss using {length} years: {history.history['loss']}")
+        logger.info(f"training accuracy using {length} years: {history.history['accuracy']}")
 
         embedding_dict = extract_ticker_embedding(
             ticker_vec_layer=ticker_layer,
@@ -203,7 +206,7 @@ class BackTest:
     def run_training_pipeline(self) -> None:
         """train model on various length
         """
-        for i in range(3, 5):
+        for i in range(3, 4):
             train_out = self.run_multiple_training_validation(
                 n=3,
                 length=i,
@@ -213,8 +216,28 @@ class BackTest:
                 )
             self.model_history[i] = train_out
 
+    def run_backtest(self) -> None:
+        # determine epochs
+        self.run_training_pipeline()
+
+        for i in range(3, 4):
+            opt_epoch = int(np.array(self.model_history[i][1]).mean())
+            embeddings = bt.run_full_data_training(
+                length=i,
+                epochs=opt_epoch,
+                initial_learning_rate=5e-4,
+                alpha=0.5,
+                decay_steps=2000
+                )
 
 
 if __name__=='__main__':
     bt = BackTest()
-    bt.run_training_pipeline()
+    # bt.run_training_pipeline()
+    test = bt.run_full_data_training(
+        length=3,
+        epochs=10,
+        initial_learning_rate=5e-4,
+        alpha=0.5,
+        decay_steps=2000
+        )
