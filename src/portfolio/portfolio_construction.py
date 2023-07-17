@@ -4,28 +4,22 @@ import cvxpy as cp
 import numpy as np
 
 from src.data.stock_data import stock_annual_return_calc
-from src.data.utils import load_pickled_obj
+from src.model.utils import lazyproperty
 from src.portfolio.utils import embeddings_to_corr
 
 
 class PortfolioConstruction:
     def __init__(
         self,
-        embedding_path: str,
-        embedding_file: str,
+        embedding_dict: Dict[str, np.array],
         last_news_date: str
         ) -> None:
         """constructor
 
         Args:
-            embedding_path (str): direcotry path for embedding pickle
-            embedding_file (str): embedding pickle file name
+            embedding_dict (Dict[str, np.array]): ticker as key and embedding as value
             last_news_date (str): the last date of news used in training embeddings
         """
-        embedding_dict = load_pickled_obj(
-            dir=embedding_path,
-            name=embedding_file
-            )
         self.last_news_date = last_news_date
         self.tickers, self.embeddings = self._get_embeddings(embedding_dict)
         self.embedding_corr = embeddings_to_corr(self.embeddings)
@@ -85,6 +79,11 @@ class PortfolioConstruction:
         return out
 
     def get_one_year_back_test_return(self) -> np.array:
+        """calculate return of the tickers in the backtest period
+
+        Returns:
+            np.array: one year return with order aligned with tickers
+        """
         out = stock_annual_return_calc(
             tickers=self.tickers,
             min_year=self.max_year,
@@ -97,23 +96,20 @@ class PortfolioConstruction:
 
         return out.to_numpy()
 
+    @lazyproperty
+    def backtest_return(self) -> np.array:
+        return self.get_one_year_back_test_return()
+
     def get_backtest_return(self, exp_return: float) -> float:
+        """calculate backtest return rate
+
+        Args:
+            exp_return (float): expected return used in the optimization
+
+        Returns:
+            float: portfolio return in the backtest period
+        """
         # optimal weights
         opt_w = self.portfolio_opt(exp_return=exp_return, cov_mat=self.embedding_corr)
-        # future 1 year return
-        backtest_return = self.get_one_year_back_test_return()
 
-        return backtest_return @ opt_w
-
-
-
-if __name__ == '__main__':
-    portfolio_constructor = PortfolioConstruction(
-        embedding_path='/home/timnaka123/Documents/stock_embedding_nlp/src/model/',
-        embedding_file='embedding.pickle',
-        last_news_date='2013-10-20'
-        )
-
-    weights = portfolio_constructor.embedding_based_opt(exp_return=0.2)
-
-    r = portfolio_constructor.get_backtest_return(exp_return=0.2)
+        return self.backtest_return @ opt_w
