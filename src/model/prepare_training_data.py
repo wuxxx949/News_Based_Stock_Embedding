@@ -16,7 +16,7 @@ from src.logger import setup_logger
 from src.meta_data import get_meta_data
 from src.model.utils import extract_date, lazyproperty, pd_anti_join, to_date
 
-logger = setup_logger('data', 'data.log')
+logger = setup_logger('data_prep', 'data.log')
 
 
 class DateManager:
@@ -111,14 +111,16 @@ class ModelDataPrep:
         self,
         min_date: datetime,
         max_date: datetime,
-        min_df: float = 0.0001
+        min_df: float = 0.0001,
+        days_lookback: int = 5
         ) -> None:
         """Constructor
 
         Args:
             min_date (datetime): min news date, inclusive
             max_date (datetime): max news date, inclusive
-            min_df (float, optional): min_df arg for TfidfVectorizer. Defaults to 0.0001.
+            min_df (float, optional): min_df arg for TfidfVectorizer.
+            days_lookback (int, optional): number of days for news to include. Defaults to 5.
         """
         self.reuters_news_path = get_meta_data()['REUTERS_DIR']
         self.bloomberg_news_path = get_meta_data()['BLOOMBERG_DIR']
@@ -126,6 +128,8 @@ class ModelDataPrep:
         self.min_date = min_date
         self.max_date = max_date
         self.min_df = min_df
+        self.days_lookback = days_lookback
+
         self.target = pd.DataFrame()
         self.bert_embedding = pd.DataFrame()
         self._load_bert_embeddings()
@@ -461,8 +465,7 @@ class ModelDataPrep:
 
     def create_dataset(
         self,
-        days_lookback: int = 5,
-        batch_size: int = 32,
+        batch_size: int = 64,
         seed_value: Optional[int] = None,
         split_method: str = 'random'
         ) -> Tuple[PaddedBatchDataset, PaddedBatchDataset]:
@@ -470,8 +473,7 @@ class ModelDataPrep:
 
         Args:
             split_method (str): how to split data into training and validation
-            days_lookback (int, optional): number of days for news to include. Defaults to 5.
-            batch_size (int, optional): batch size. Defaults to 32.
+            batch_size (int, optional): batch size. Defaults to 64.
             seed_value (Optional[int], optional): RNG seed. Defaults to 42.
             split_method(str, optional):
 
@@ -489,7 +491,7 @@ class ModelDataPrep:
             trading_dates=self.trading_date,
             news_dates=self.news_date,
             embedding_df=embedding_df,
-            days_lookback=days_lookback
+            days_lookback=self.days_lookback
             )
         training_dataset = self._create_dataset(
             label_df=train_target_random,
@@ -502,27 +504,33 @@ class ModelDataPrep:
             batch_size=batch_size
             )
 
-        # for full training dataset
-        self.embedding_loopup = embedding_lookup
-        self.days_lookback = days_lookback
-        self.batch_size = batch_size
-
         return training_dataset, validation_dataset
 
     def create_single_dataset(
         self,
+        batch_size: int = 64
         ) -> PaddedBatchDataset:
         """create signle training dataset with all dates
+
+        Args:
+            batch_size (int, optional): batch size. Defaults to 64.
 
         Returns:
             PaddedBatchDataset: training dataset with all dates
         """
-        _, target_df = self.prep_raw_model_data()
+        embedding_df, target_df = self.prep_raw_model_data()
+
+        embedding_lookup = self._fetch_embeddings(
+            trading_dates=self.trading_date,
+            news_dates=self.news_date,
+            embedding_df=embedding_df,
+            days_lookback=self.days_lookback
+            )
 
         dataset = self._create_dataset(
             label_df=target_df,
-            embedding_lookup=self.embedding_lookup,
-            batch_size=self.batch_size
+            embedding_lookup=embedding_lookup,
+            batch_size=batch_size
             )
 
         return dataset

@@ -134,7 +134,7 @@ def extract_ticker_embedding(
     tickers = ticker_vec_layer.get_vocabulary()[2:] # index 0, 1 for reserved tokcen
     out = {}
     for t in tickers:
-        out[t] = encoder_embedding_layer(ticker_vec([t])[0])[0].numpy()
+        out[t] = encoder_embedding_layer(ticker_vec_layer([t])[0])[0].numpy()
 
     return out
 
@@ -149,13 +149,13 @@ if __name__ == '__main__':
     model, ticker_vec, ticker_embedding = get_model(
         tickers=tickers,
         initial_learning_rate=5e-4,
-        alpha=0.99,
+        alpha=0.8,
         decay_steps=1000
         )
 
     dm = DateManager()
 
-    start_date, end_date = dm.get_date_range(data_len=7)
+    start_date, end_date = dm.get_date_range(data_len=3)
 
     mdp = ModelDataPrep(
         min_date=start_date,
@@ -165,11 +165,10 @@ if __name__ == '__main__':
     training_ds, validation_ds = mdp.create_dataset(seed_value=42, batch_size=64)
     early_stop = EarlyStopping(
         monitor='val_loss',
-        patience=10,
-        start_from_epoch=5
+        patience=10
         )
 
-    hisotry = model.fit(
+    history = model.fit(
         training_ds,
         validation_data=validation_ds,
         epochs=40,
@@ -177,11 +176,7 @@ if __name__ == '__main__':
         )
 
     # log model history
-    logger.info(f"training loss: {hisotry.history['loss']}")
-    logger.info(f"validatoin loss: {hisotry.history['val_loss']}")
-    logger.info(f"training accuracy: {hisotry.history['accuracy']}")
-    logger.info(f"validatoin accuracy: {hisotry.history['val_accuracy']}")
-
-    # extract embeddings
-    # TODO: make a function
-    # out = {}y
+    logger.info(f"training loss: {history.history['loss']}")
+    logger.info(f"validatoin loss: {history.history['val_loss']}")
+    logger.info(f"training accuracy: {history.history['accuracy']}")
+    logger.info(f"validatoin accuracy: {history.history['val_accuracy']}")
