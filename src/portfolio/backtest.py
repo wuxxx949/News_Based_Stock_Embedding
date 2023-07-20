@@ -18,9 +18,13 @@ logger = setup_logger(logger_name='bt', log_file='backtest.log')
 class BackTest:
     """test model prediction performance and portfolio return
     """
-    def __init__(self) -> None:
+    def __init__(self, n: int) -> None:
         """constructor
+
+        Args:
+            n (int): number of repetitions
         """
+        self.n = n
         self.meta_data = get_meta_data()
         self.tickers = pd.read_parquet(
             os.path.join(self.meta_data['SAVE_DIR'], 'target_df.parquet.gzip')
@@ -117,7 +121,6 @@ class BackTest:
 
     def run_multiple_training_validation(
         self,
-        n: int,
         length: int,
         initial_learning_rate: float,
         alpha: float,
@@ -128,7 +131,6 @@ class BackTest:
         """run model on multiple randomly split training and validation datasets
 
         Args:
-            n (int): number of repetitions
             length (int): number of years of data to use
             initial_learning_rate (float): initial learning rate for cosine decay lr scheduler
             alpha (float): alpha for cosine decay lr scheduler
@@ -142,7 +144,7 @@ class BackTest:
         result_max_acc = []
         result_min_iter = []
         logger.info(f"Run multiple training validation using {length} years data {'-' * 20}")
-        for i in range(n):
+        for i in range(self.n):
             out = self.run_single_training_validation(
                 length=length,
                 initial_learning_rate=initial_learning_rate,
@@ -205,12 +207,15 @@ class BackTest:
 
         return embedding_dict
 
-    def run_training_pipeline(self) -> None:
+    def run_training_pipeline(self, min_n: int = 3, max_n: int = 4) -> None:
         """train model on various length
+
+        Args:
+            min_n (int, optional): min length in years to run. Defaults to 3.
+            max_n (int, optional): max length in years to run. Defaults to 4.
         """
-        for i in range(3, 4):
+        for i in range(min_n, max_n + 1):
             train_out = self.run_multiple_training_validation(
-                n=3,
                 length=i,
                 initial_learning_rate=5e-4,
                 alpha=0.5,
@@ -218,13 +223,19 @@ class BackTest:
                 )
             self.model_history[i] = train_out
 
-    def run_backtest(self) -> None:
-        # determine epochs
-        self.run_training_pipeline()
-        bt_results = {}
+    def run_backtest(self, min_n: int = 3, max_n: int = 4) -> None:
+        """run backtest for selected length of data
 
-        for i in range(3, 4):
-            opt_epoch = int(np.array(self.model_history[i][1]).mean())
+        Args:
+            min_n (int, optional): min length in years to run. Defaults to 3.
+            max_n (int, optional): max length in years to run. Defaults to 4.
+        """
+        # determine epochs
+        # self.run_training_pipeline(min_n=min_n, max_n=max_n)
+
+        for i in range(min_n, max_n + 1):
+            # opt_epoch = int(np.array(self.model_history[i][1]).mean())
+            opt_epoch = 4
             embeddings = bt.run_full_data_training(
                 length=i,
                 epochs=opt_epoch,
@@ -233,17 +244,23 @@ class BackTest:
                 decay_steps=2000
                 )
             _, end_date = self.dm.get_date_range(data_len=i)
-            pc = PortfolioConstruction(embedding_dict=embeddings, last_news_date=end_date)
-            tmp_return_lst = []
+            pc = PortfolioConstruction(
+                embedding_dict=embeddings,
+                last_news_date=str(end_date.date())
+                )
+            tmp_return_dict = {}
             for r in self.exp_return:
                 tmp_return = pc.get_backtest_return(exp_return=r)
-                tmp_return_lst.append(tmp_return)
-            bt_results[i] = tmp_return
+                tmp_return_dict[r] = tmp_return
+
+            self.portfolio_performance[i] = tmp_return_dict
             # TODO: make summary plot and save to folder
 
 
 if __name__=='__main__':
-    bt = BackTest()
+    bt = BackTest(n=3)
+
+    bt.run_backtest(min_n=3, max_n=3)
     # bt.run_training_pipeline()
     test = bt.run_full_data_training(
         length=3,

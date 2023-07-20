@@ -21,7 +21,8 @@ class PortfolioConstruction:
             last_news_date (str): the last date of news used in training embeddings
         """
         self.last_news_date = last_news_date
-        self.tickers, self.embeddings = self._get_embeddings(embedding_dict)
+        tickers, self.embeddings = self._get_embeddings(embedding_dict)
+        self.tickers = [e.upper() for e in tickers]
         self.embedding_corr = embeddings_to_corr(self.embeddings)
         # historical average annual return over 10 years
         self.hist_return = self.get_stock_avg_return()
@@ -48,7 +49,6 @@ class PortfolioConstruction:
             mmdd=self.mmdd
             ) \
             .set_index('ticker') \
-            .filter(self.tickers, axis=0) \
             .loc[:, 'annual_return']
 
         assert len(out) == len(self.tickers), 'avg return len differs from input tickers'
