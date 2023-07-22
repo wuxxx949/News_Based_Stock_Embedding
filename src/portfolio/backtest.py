@@ -207,7 +207,74 @@ class BackTest:
 
         embedding_dict = extract_ticker_embedding(
             ticker_vec_layer=ticker_layer,
-            encoder_embedding_layer=embedding_layer)
+            encoder_embedding_layer=embedding_layer
+            )
+
+        return embedding_dict
+
+    def run_data_training(
+        self,
+        length: int,
+        initial_learning_rate: float,
+        alpha: float,
+        decay_steps: int
+        ) -> Dict[str, np.array]:
+        """train model using optimal epochs using validation set
+
+        Args:
+            length (int): number of years of data to use
+            epochs (int): number of epochs
+            initial_learning_rate (float): initial learning rate for cosine decay lr scheduler
+            alpha (float): alpha for cosine decay lr scheduler
+            decay_steps (int): decay steps for cosine decay lr scheduler
+
+        Returns:
+            Dict[str, np.array]: ticker as key and trained embeddings as value
+        """
+        tf.keras.backend.clear_session()
+        model, _, _ = get_model(
+            tickers=self.tickers,
+            initial_learning_rate=initial_learning_rate,
+            alpha=alpha,
+            decay_steps=decay_steps
+            )
+
+        start_date, end_date = self.dm.get_date_range(data_len=length)
+        mdp = ModelDataPrep(min_date=start_date, max_date=end_date)
+        training_ds, validation_ds = mdp.create_dataset(batch_size=64, seed_value=None)
+        hisotry = model.fit(
+            training_ds,
+            validation_data=validation_ds,
+            epochs=self.epochs
+            )
+
+        val_accuracy = hisotry.history['val_accuracy']
+        opt_epochs = np.array(val_accuracy).argmax() + 1
+
+        tf.keras.backend.clear_session()
+        model1, ticker_layer, embedding_layer = get_model(
+            tickers=self.tickers,
+            initial_learning_rate=initial_learning_rate,
+            alpha=alpha,
+            decay_steps=decay_steps
+            )
+
+        hisotry1 = model1.fit(
+            training_ds,
+            validation_data=validation_ds,
+            epochs=opt_epochs
+            )
+
+        logger.info(f'opt epochs: {opt_epochs}')
+        logger.info(f"training loss: {hisotry1.history['loss']}")
+        logger.info(f"validatoin loss: {hisotry1.history['val_loss']}")
+        logger.info(f"training accuracy: {hisotry1.history['accuracy']}")
+        logger.info(f"validatoin accuracy: {hisotry1.history['val_accuracy']}")
+
+        embedding_dict = extract_ticker_embedding(
+            ticker_vec_layer=ticker_layer,
+            encoder_embedding_layer=embedding_layer
+            )
 
         return embedding_dict
 
@@ -258,15 +325,15 @@ class BackTest:
             max_n (int, optional): max length in years to run. Defaults to 4.
         """
         # determine epochs
-        self.run_training_pipeline(min_n=min_n, max_n=max_n)
+        # self.run_training_pipeline(min_n=min_n, max_n=max_n)
 
         for i in range(min_n, max_n + 1):
-            opt_epoch = int(np.array(self.model_history[i][1]).mean()) + 1
-            logger.info(f'use {opt_epoch} epochs for {i} training years')
-            # opt_epoch = 35
-            embeddings = bt.run_full_data_training(
+            # opt_epoch = int(np.array(self.model_history[i][1]).mean()) + 10
+            # ogger.info(f'use {opt_epoch} epochs for {i} training years')
+            # opt_epoch = 50
+            embeddings = bt.run_data_training(
                 length=i,
-                epochs=opt_epoch,
+                # epochs=opt_epoch,
                 initial_learning_rate=5e-4,
                 alpha=0.5,
                 decay_steps=2000
