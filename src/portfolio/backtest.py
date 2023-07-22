@@ -231,11 +231,12 @@ class BackTest:
             max_n (int, optional): max length in years to run. Defaults to 4.
         """
         # determine epochs
-        # self.run_training_pipeline(min_n=min_n, max_n=max_n)
+        self.run_training_pipeline(min_n=min_n, max_n=max_n)
 
         for i in range(min_n, max_n + 1):
-            # opt_epoch = int(np.array(self.model_history[i][1]).mean())
-            opt_epoch = 4
+            opt_epoch = int(np.array(self.model_history[i][1]).mean())
+            logger.info(f'use {opt_epoch} epochs for {i} training years')
+            # opt_epoch = 30
             embeddings = bt.run_full_data_training(
                 length=i,
                 epochs=opt_epoch,
@@ -248,24 +249,33 @@ class BackTest:
                 embedding_dict=embeddings,
                 last_news_date=str(end_date.date())
                 )
-            tmp_return_dict = {}
+            tmp_return_lst = []
             for r in self.exp_return:
-                tmp_return = pc.get_backtest_return(exp_return=r)
-                tmp_return_dict[r] = tmp_return
+                tmp_return, tmp_portfolio = pc.get_backtest_results(exp_return=r)
+                tmp_return_dict = {}
+                tmp_return_dict['exp_return'] = r
+                tmp_return_dict['actual_return'] = tmp_return
+                tmp_return_dict['weights'] = tmp_portfolio
+                tmp_return_lst.append(tmp_return_dict)
 
-            self.portfolio_performance[i] = tmp_return_dict
+            self.portfolio_performance[i] = tmp_return_lst
             # TODO: make summary plot and save to folder
 
 
 if __name__=='__main__':
-    bt = BackTest(n=3)
+    bt = BackTest(n=5)
 
     bt.run_backtest(min_n=3, max_n=3)
+    idx = 15
+    print(bt.portfolio_performance[3][idx]['exp_return'])
+    print(bt.portfolio_performance[3][idx]['actual_return'])
+    print(bt.portfolio_performance[3][idx]['weights'])
+
     # bt.run_training_pipeline()
-    test = bt.run_full_data_training(
-        length=3,
-        epochs=10,
-        initial_learning_rate=5e-4,
-        alpha=0.5,
-        decay_steps=2000
-        )
+    # test = bt.run_full_data_training(
+    #     length=3,
+    #     epochs=10,
+    #     initial_learning_rate=5e-4,
+    #     alpha=0.5,
+    #     decay_steps=2000
+    #     )
