@@ -158,14 +158,14 @@ def sleep_time(loc: float, scale: float):
     return out
 
 
-def get_nearest_trading_date(date: str) -> Tuple[str]:
+def get_nearest_trading_date(date: str) -> Tuple[str, str]:
     """find the closet non-past US trading date
 
     Args:
         date (str): input date
 
     Returns:
-        str: trading date
+        Tuple[str, str]: nearest non-past trading date and next trading date
     """
     # assume US exchange
     date_dt = datetime.datetime.strptime(date, '%Y-%m-%d')
@@ -177,6 +177,35 @@ def get_nearest_trading_date(date: str) -> Tuple[str]:
     td_str = [str(e .to_pydatetime().date()) for e in td]
 
     return td_str[0], td_str[1]
+
+
+def find_next_traindg_date(date: str) -> str:
+    """find the trading date w.r.t. US trading calender
+
+    Args:
+        date (str): date
+
+    Returns:
+        str: next trading date
+    """
+    _, next_td = get_nearest_trading_date(date)
+
+    return next_td
+
+
+def shift_to_future_one_year(date: str) -> str:
+    """shift 1 year to the future
+
+    Args:
+        date (str): date
+
+    Returns:
+        str: date shfited 1 year to future
+    """
+    date_dt = datetime.datetime.strptime(date, '%Y-%m-%d')
+    date_p1y = date_dt.replace(year=date_dt.year + 1)
+
+    return str(date_p1y.date())
 
 
 def text_preprocessing(text: str):

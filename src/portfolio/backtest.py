@@ -1,11 +1,13 @@
 import os
 from typing import Dict, List, Optional, Tuple
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import tensorflow as tf
 from tensorflow.keras.callbacks import EarlyStopping
 
+from src.data.utils import find_next_traindg_date, shift_to_future_one_year
 from src.logger import setup_logger
 from src.meta_data import get_meta_data
 from src.model.model import extract_ticker_embedding, get_model
@@ -18,13 +20,15 @@ logger = setup_logger(logger_name='bt', log_file='backtest.log')
 class BackTest:
     """test model prediction performance and portfolio return
     """
-    def __init__(self, n: int) -> None:
+    def __init__(self, n: int, epochs: int) -> None:
         """constructor
 
         Args:
             n (int): number of repetitions
+            epochs (int): number of epochs
         """
         self.n = n
+        self.epochs = epochs
         self.meta_data = get_meta_data()
         self.tickers = pd.read_parquet(
             os.path.join(self.meta_data['SAVE_DIR'], 'target_df.parquet.gzip')
@@ -46,13 +50,13 @@ class BackTest:
         Args:
             val_loss (List[float]): validation loss from training history
             val_accuracy (List[float]): validation accuracy from training history
-            use_accuracy (bool):
+            use_accuracy (bool): if use accuracy
 
         Returns:
             Tuple[float, int]: validation accuracy and associated iteration
         """
         if use_accuracy:
-            arg_min = np.array(val_accuracy).argmin()
+            arg_min = np.array(val_accuracy).argmax()
         else:
             arg_min = np.array(val_loss).argmin()
 
@@ -102,14 +106,14 @@ class BackTest:
             hisotry = model.fit(
                 training_ds,
                 validation_data=validation_ds,
-                epochs=40,
+                epochs=self.epochs,
                 callbacks=[early_stop]
                 )
         else:
             hisotry = model.fit(
                 training_ds,
                 validation_data=validation_ds,
-                epochs=40
+                epochs=self.epochs
                 )
 
         training_loss = hisotry.history['loss']
@@ -223,6 +227,29 @@ class BackTest:
                 )
             self.model_history[i] = train_out
 
+    def _make_summary(self) -> None:
+        if len(self.portfolio_performance) == 0:
+            print('run run_backtest method first')
+            raise
+
+        for k, v in self.portfolio_performance.items():
+            start_date, end_date = self.dm.get_date_range(data_len=k)
+            train_start_date = str(start_date.date())
+            train_end_date = str(end_date.date())
+            test_start_date = find_next_traindg_date(train_end_date)
+            test_end_date = shift_to_future_one_year(test_start_date)
+
+            title = f'training period: {train_start_date}-{train_end_date} \n' + \
+                f'test period: {test_start_date}-{test_end_date}'
+
+            actual_return = [d['actual_return'] for d in v]
+            expected_return = [round(d['exp_return'], 2) for d in v]
+            plt.plot(expected_return, actual_return, marker='o', linestyle='-')
+            plt.xlabel('Expected Return')
+            plt.ylabel('Actual Return')
+            plt.title(title)
+            plt.savefig(f'training_length_{k}.png')
+
     def run_backtest(self, min_n: int = 3, max_n: int = 4) -> None:
         """run backtest for selected length of data
 
@@ -234,9 +261,9 @@ class BackTest:
         self.run_training_pipeline(min_n=min_n, max_n=max_n)
 
         for i in range(min_n, max_n + 1):
-            opt_epoch = int(np.array(self.model_history[i][1]).mean())
+            opt_epoch = int(np.array(self.model_history[i][1]).mean()) + 1
             logger.info(f'use {opt_epoch} epochs for {i} training years')
-            # opt_epoch = 30
+            # opt_epoch = 35
             embeddings = bt.run_full_data_training(
                 length=i,
                 epochs=opt_epoch,
@@ -244,7 +271,9 @@ class BackTest:
                 alpha=0.5,
                 decay_steps=2000
                 )
+
             _, end_date = self.dm.get_date_range(data_len=i)
+
             pc = PortfolioConstruction(
                 embedding_dict=embeddings,
                 last_news_date=str(end_date.date())
@@ -259,11 +288,13 @@ class BackTest:
                 tmp_return_lst.append(tmp_return_dict)
 
             self.portfolio_performance[i] = tmp_return_lst
-            # TODO: make summary plot and save to folder
+
+            # make summary plot and save to folder
+            self._make_summary()
 
 
 if __name__=='__main__':
-    bt = BackTest(n=5)
+    bt = BackTest(n=3, epochs=40)
 
     bt.run_backtest(min_n=3, max_n=3)
     idx = 15
