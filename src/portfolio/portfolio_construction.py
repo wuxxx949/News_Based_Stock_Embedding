@@ -2,6 +2,7 @@ from typing import Dict, Tuple
 
 import cvxpy as cp
 import numpy as np
+import pandas as pd
 
 from src.data.stock_data import stock_annual_return_calc
 from src.model.utils import lazyproperty
@@ -100,16 +101,21 @@ class PortfolioConstruction:
     def backtest_return(self) -> np.array:
         return self.get_one_year_back_test_return()
 
-    def get_backtest_return(self, exp_return: float) -> float:
+    def get_backtest_results(self, exp_return: float) -> Tuple[float, pd.DataFrame]:
         """calculate backtest return rate
 
         Args:
             exp_return (float): expected return used in the optimization
 
         Returns:
-            float: portfolio return in the backtest period
+            Tuple[float, pd.DataFrame]:  portfolio return in the backtest period and portfolio weights
         """
         # optimal weights
         opt_w = self.portfolio_opt(exp_return=exp_return, cov_mat=self.embedding_corr)
 
-        return self.backtest_return @ opt_w
+        # portfolio weights
+        weights_df = pd.DataFrame({'ticker': self.tickers, 'weight': opt_w}) \
+            .sort_values('weight', ascending=False, ignore_index=True)
+
+
+        return self.backtest_return @ opt_w, weights_df
