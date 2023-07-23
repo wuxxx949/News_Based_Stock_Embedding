@@ -299,6 +299,31 @@ class BackTest:
             print('run run_backtest method first')
             raise
 
+        # out-of-sample backtest
+        y_legend = []
+        accuracy = []
+        std = []
+        for k, v in self.model_history:
+            start_date, end_date = self.dm.get_date_range(data_len=k)
+            y_legend.append(f'{str(start_date.date())}-{str(end_date.date())}')
+            avg_accuracy = np.mean(v[0])
+            accuracy_std = np.std(v[0])
+            accuracy.append(avg_accuracy)
+            std.append(accuracy_std)
+
+        plt.barh(y_legend, accuracy, color='#3446eb')
+        for index, value in enumerate(accuracy):
+            plt.text(value, index, f'{round(value, 2)} ({round(std[index], 3)})', ha='left', va='center')
+
+        # Customize the plot
+        plt.xlabel('accuracy')
+        plt.ylabel('Period')
+        plt.title(f'Model Accuracy and Std ({self.n} rep)')
+        # Turn off the background grid
+        plt.grid(False)
+        plt.savefig(os.path.join(self.meta_data['RESULTS_DIR'], 'pred_accuracy.png'))
+
+        # portfolio backtest
         for k, v in self.portfolio_performance.items():
             start_date, end_date = self.dm.get_date_range(data_len=k)
             train_start_date = str(start_date.date())
@@ -311,11 +336,11 @@ class BackTest:
 
             actual_return = [d['actual_return'] for d in v]
             expected_return = [round(d['exp_return'], 2) for d in v]
-            plt.plot(expected_return, actual_return, marker='o', linestyle='-')
+            plt.plot(expected_return, actual_return, marker='o', linestyle='-', color='#3446eb')
             plt.xlabel('Expected Return')
             plt.ylabel('Actual Return')
             plt.title(title)
-            plt.savefig(f'training_length_{k}.png')
+            plt.savefig(os.path.join(self.meta_data['RESULTS_DIR'], f'training_length_{k}.png'))
 
     def run_backtest(self, min_n: int = 3, max_n: int = 4) -> None:
         """run backtest for selected length of data
@@ -325,7 +350,7 @@ class BackTest:
             max_n (int, optional): max length in years to run. Defaults to 4.
         """
         # determine epochs
-        # self.run_training_pipeline(min_n=min_n, max_n=max_n)
+        self.run_training_pipeline(min_n=min_n, max_n=max_n)
 
         for i in range(min_n, max_n + 1):
             # opt_epoch = int(np.array(self.model_history[i][1]).mean()) + 10
@@ -356,12 +381,12 @@ class BackTest:
 
             self.portfolio_performance[i] = tmp_return_lst
 
-            # make summary plot and save to folder
-            self._make_summary()
+        # make summary plot and save to folder
+        self._make_summary()
 
 
 if __name__=='__main__':
-    bt = BackTest(n=3, epochs=40)
+    bt = BackTest(n=5, epochs=40)
 
     bt.run_backtest(min_n=3, max_n=3)
     idx = 15
