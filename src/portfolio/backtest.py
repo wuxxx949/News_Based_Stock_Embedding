@@ -220,7 +220,8 @@ class BackTest:
         length: int,
         initial_learning_rate: float,
         alpha: float,
-        decay_steps: int
+        decay_steps: int,
+        epochs: Optional[int] = None
         ) -> Dict[str, np.array]:
         """train model using optimal epochs using validation set
 
@@ -230,6 +231,7 @@ class BackTest:
             initial_learning_rate (float): initial learning rate for cosine decay lr scheduler
             alpha (float): alpha for cosine decay lr scheduler
             decay_steps (int): decay steps for cosine decay lr scheduler
+            epochs (Optional[int], optional): epochs to use. Default to None.
 
         Returns:
             Dict[str, np.array]: ticker as key and trained embeddings as value
@@ -248,14 +250,17 @@ class BackTest:
             batch_size=64,
             seed_value=length
             )
-        hisotry = model.fit(
-            training_ds,
-            validation_data=validation_ds,
-            epochs=self.epochs
-            )
+        if epochs is None:
+            hisotry = model.fit(
+                training_ds,
+                validation_data=validation_ds,
+                epochs=self.epochs
+                )
 
-        val_accuracy = hisotry.history['val_accuracy']
-        opt_epochs = np.array(val_accuracy).argmax() + 1
+            val_accuracy = hisotry.history['val_accuracy']
+            opt_epochs = np.array(val_accuracy).argmax() + 1
+        else:
+            opt_epochs = epochs
 
         tf.keras.backend.clear_session()
         model1, ticker_layer, embedding_layer = get_model(
@@ -292,10 +297,11 @@ class BackTest:
             max_n (int, optional): max length in years to run. Defaults to 4.
         """
         for i in range(min_n, max_n + 1):
+            alpha = 0.5 + (i - 3) / 4 * 0.3 # more data larger step
             train_out = self.run_multiple_training_validation(
                 length=i,
                 initial_learning_rate=5e-4,
-                alpha=0.5,
+                alpha=alpha,
                 decay_steps=2000
                 )
             self.model_history[i] = train_out
@@ -366,14 +372,16 @@ class BackTest:
         self,
         min_n: int = 3,
         max_n: int = 4,
-        multiple_run: bool = True
+        multiple_run: bool = True,
+        epochs: Optional[int] = None
         ) -> None:
         """run backtest for selected length of data
 
         Args:
             min_n (int, optional): min length in years to run. Defaults to 3.
             max_n (int, optional): max length in years to run. Defaults to 4.
-            multiple_run (bool, optional): if run training pipeline. Defaults to True
+            multiple_run (bool, optional): if run training pipeline. Defaults to True.
+            epochs (Optional[int], optional): epochs to use. Default to None.
         """
         if multiple_run:
             self.run_training_pipeline(min_n=min_n, max_n=max_n)
@@ -381,12 +389,13 @@ class BackTest:
         for i in range(min_n, max_n + 1):
             # opt_epoch = int(np.array(self.model_history[i][1]).mean()) + 10
             # ogger.info(f'use {opt_epoch} epochs for {i} training years')
-            # opt_epoch = 50
+            alpha = 0.5 + (i - 3) / 4 * 0.5 # more data larger step
             embeddings = bt.run_data_training(
                 length=i,
                 initial_learning_rate=5e-4,
-                alpha=0.5,
-                decay_steps=2000
+                alpha=alpha,
+                decay_steps=2000,
+                epochs=epochs
                 )
 
             _, end_date = self.dm.get_date_range(data_len=i)
@@ -413,7 +422,7 @@ class BackTest:
 if __name__=='__main__':
     bt = BackTest(n=5, epochs=40)
 
-    bt.run_backtest(min_n=7, max_n=7, multiple_run=False)
+    bt.run_backtest(min_n=4, max_n=4, multiple_run=False, epochs=None)
     idx = 15
     print(bt.portfolio_performance[3][idx]['exp_return'])
     print(bt.portfolio_performance[3][idx]['actual_return'])
