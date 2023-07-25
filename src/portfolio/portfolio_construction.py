@@ -31,7 +31,8 @@ class PortfolioConstruction:
 
     @staticmethod
     def _get_embeddings(embedding_dict: Dict[str, np.array]) -> Tuple[str, np.array]:
-        tickers = list(embedding_dict.keys())
+        tickers = sorted(list(embedding_dict.keys()))
+        embedding_dict = {i: embedding_dict[i] for i in tickers}
         embeddings = np.vstack(embedding_dict.values())
 
         return tickers, embeddings
@@ -66,7 +67,7 @@ class PortfolioConstruction:
         constraints.append(self.hist_return[np.newaxis,:] @ wp == exp_return)
         # 0 <= w <= 1 constraint
         for i, _ in enumerate(self.tickers):
-            constraints.append(wp[i] <= 1)
+            constraints.append(wp[i] <= 0.15)
             constraints.append(wp[i] >= 0)
 
         prob = cp.Problem(cp.Minimize(cp.quad_form(wp, cov_mat)), constraints)
