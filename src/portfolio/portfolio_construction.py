@@ -53,9 +53,6 @@ class PortfolioConstruction:
         Returns:
             np.array: average annual return
         """
-        if year_lookback < 1:
-            raise ValueError('year lookback must greater than 0')
-
         self._return_calc_input()
         out = stock_annual_return_calc(
             tickers=self.tickers,
