@@ -373,7 +373,8 @@ class BackTest:
         min_n: int = 3,
         max_n: int = 4,
         multiple_run: bool = True,
-        epochs: Optional[int] = None
+        epochs: Optional[int] = None,
+        year_lookback: int = 3
         ) -> None:
         """run backtest for selected length of data
 
@@ -382,6 +383,7 @@ class BackTest:
             max_n (int, optional): max length in years to run. Defaults to 4.
             multiple_run (bool, optional): if run training pipeline. Defaults to True.
             epochs (Optional[int], optional): epochs to use. Default to None.
+            year_lookback (int): number of years look back for historical return
         """
         if multiple_run:
             self.run_training_pipeline(min_n=min_n, max_n=max_n)
@@ -402,7 +404,8 @@ class BackTest:
 
             pc = PortfolioConstruction(
                 embedding_dict=embeddings,
-                last_news_date=str(end_date.date())
+                last_news_date=str(end_date.date()),
+                year_lookback=year_lookback
                 )
             tmp_return_lst = []
             for r in self.exp_return:
@@ -422,7 +425,7 @@ class BackTest:
 if __name__=='__main__':
     bt = BackTest(n=5, epochs=40)
 
-    bt.run_backtest(min_n=4, max_n=4, multiple_run=False, epochs=None)
+    bt.run_backtest(min_n=2, max_n=3, multiple_run=True, epochs=None)
     idx = 15
     print(bt.portfolio_performance[3][idx]['exp_return'])
     print(bt.portfolio_performance[3][idx]['actual_return'])

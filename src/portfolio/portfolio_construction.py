@@ -13,20 +13,22 @@ class PortfolioConstruction:
     def __init__(
         self,
         embedding_dict: Dict[str, np.array],
-        last_news_date: str
+        last_news_date: str,
+        year_lookback: int = 3
         ) -> None:
         """constructor
 
         Args:
             embedding_dict (Dict[str, np.array]): ticker as key and embedding as value
             last_news_date (str): the last date of news used in training embeddings
+            year_lookback (int): number of years look back for historical return
         """
         self.last_news_date = last_news_date
         tickers, self.embeddings = self._get_embeddings(embedding_dict)
         self.tickers = [e.upper() for e in tickers]
         self.embedding_corr = embeddings_to_corr(self.embeddings)
         # historical average annual return over 10 years
-        self.hist_return = self.get_stock_avg_return()
+        self.hist_return = self.get_stock_avg_return(year_lookback)
 
 
     @staticmethod
@@ -42,11 +44,22 @@ class PortfolioConstruction:
         self.max_year = int(date_split[0])
         self.mmdd = '-'.join(date_split[1:])
 
-    def get_stock_avg_return(self) -> np.array:
+    def get_stock_avg_return(self, year_lookback: int = 3) -> np.array:
+        """calculate average stock annual return
+
+        Args:
+            year_lookback (int): number of years look back
+
+        Returns:
+            np.array: average annual return
+        """
+        if year_lookback < 1:
+            raise ValueError('year lookback must greater than 0')
+
         self._return_calc_input()
         out = stock_annual_return_calc(
             tickers=self.tickers,
-            min_year=self.max_year - 10,
+            min_year=self.max_year - year_lookback,
             max_year=self.max_year,
             mmdd=self.mmdd
             ) \
@@ -67,7 +80,7 @@ class PortfolioConstruction:
         constraints.append(self.hist_return[np.newaxis,:] @ wp == exp_return)
         # 0 <= w <= 1 constraint
         for i, _ in enumerate(self.tickers):
-            constraints.append(wp[i] <= 0.15)
+            constraints.append(wp[i] <= 1)
             constraints.append(wp[i] >= 0)
 
         prob = cp.Problem(cp.Minimize(cp.quad_form(wp, cov_mat)), constraints)
