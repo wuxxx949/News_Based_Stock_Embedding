@@ -363,7 +363,6 @@ class BackTest:
 
         # Customize the plot
         plt.xlabel('accuracy')
-        plt.ylabel('Period')
         plt.title(f'Model Accuracy and Std ({self.n} rep)')
         # Turn off the background grid
         plt.grid(False)
