@@ -334,6 +334,7 @@ class BackTest:
             plt.ylabel('Actual Return')
             plt.title(title)
             plt.savefig(os.path.join(self.meta_data['RESULTS_DIR'], f'training_length_{k}.png'))
+            plt.clf()
 
         if not multiple_run:
             return
@@ -342,7 +343,7 @@ class BackTest:
         y_legend = []
         accuracy = []
         std = []
-        for k, v in self.model_history:
+        for k, v in self.model_history.items():
             start_date, end_date = self.dm.get_date_range(data_len=k)
             y_legend.append(f'{str(start_date.date())}-{str(end_date.date())}')
             avg_accuracy = np.mean(v[0])
