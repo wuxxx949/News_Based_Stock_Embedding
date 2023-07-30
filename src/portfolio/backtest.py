@@ -392,7 +392,7 @@ class BackTest:
             # opt_epoch = int(np.array(self.model_history[i][1]).mean()) + 10
             # ogger.info(f'use {opt_epoch} epochs for {i} training years')
             alpha = 0.5 + (i - 3) / 4 * 0.5 # more data larger step
-            embeddings = bt.run_data_training(
+            embeddings = self.run_data_training(
                 length=i,
                 initial_learning_rate=5e-4,
                 alpha=alpha,
