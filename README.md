@@ -29,7 +29,7 @@ Motivated by the attention mechanism, for day $t$, the input data is a pair of '
 The attention to the sentence embedding is defined as
 $$\alpha_i^j=\frac{exp({score}_{i,j})}{\sum_{l}exp({score}_{l,j})}.$$
 
-$$\frac{a_{i,j}}{\sum_{l}\exp(\text{score}_{l, j})}.$$
+$$\frac{\exp(\text{score}_l)}{\sum_{l}\exp(\text{score}_{l, j})}.$$
 
 
 Finally, the market vector for stock $j$ on day $t$ is
