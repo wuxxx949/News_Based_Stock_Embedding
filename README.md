@@ -27,7 +27,7 @@ The stock price movement prediction is considered a very difficult problem, if w
 Motivated by the attention mechanism, for day $t$, the input data is a pair of 'key' and 'value' news embeddings $(n_i^K, n_i^V)$. The paper denoted the collection of the TFIDF-weighted news embeddings by $N_t^K=\lbrace n_i^K\rbrace_t$ and sentence embeddings by $N_t^V=\lbrace n_i^V\rbrace_t$. The model first calculate the attention score of stock $i$ and news $j$ as $\text{score}_{i,j} = n_i^K \cdot s_j$, where $s_j$ is the stock embedding for stock $j$.
 
 The attention to the sentence embedding is defined as
-$$\alpha_i^j=\frac{exp(\text{score}_{i,j})}{\sum_{i^\prime}exp(\text{score}_{i^\prime,j})}.$$
+$$\alpha_i^j=\frac{\exp(\text{score}_{i,j})}{\sum_{l}\exp(\text{score}_{l,j})}.$$
 
 Finally, the market vector for stock $j$ on day $t$ is
 $$m_t^j = \sum_{n_i^V\in N_t^V} \alpha_i^j n_i^V$$
