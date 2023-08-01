@@ -33,6 +33,8 @@ $$\alpha_i^j=\frac{exp({score}_{i,j})}{\sum_{l}exp({score}_{l,j})}.$$
 Finally, the market vector for stock $j$ on day $t$ is
 $$m_t^j = \sum_{n_i^V\in N_t^V} \alpha_i^j n_i^V$$
 
+$$\frac{P}{Q}$$
+
 To predict the stock movement, we need the most recent 5 days market vectror collection $M^j_{[t-4, t]}=[m^j_{t-4}, m^j_{t-3}, \dots, m^j_{t}]$. The model used a Bi-GRU layer and a MLP layer to estimate the positive movement probability $\hat y_t^j$, i.e., $h_t^O = \text{GRU}(M^j_{[t-4, t]})$, and $\hat y_t^j = \sigma(\text{MLP}(h^O-t))$.
 
 The optional temporal re-weighting method is also implemented.
