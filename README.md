@@ -27,13 +27,14 @@ The stock price movement prediction is considered a very difficult problem, if w
 Motivated by the attention mechanism, for day $t$, the input data is a pair of 'key' and 'value' news embeddings $(n_i^K, n_i^V)$. The paper denoted the collection of the TFIDF-weighted news embeddings by $N_t^K=\lbrace n_i^K\rbrace_t$ and sentence embeddings by $N_t^V=\lbrace n_i^V\rbrace_t$. The model first calculate the attention score of stock $i$ and news $j$ as $\text{score}_{i,j} = n_i^K \cdot s_j$, where $s_j$ is the stock embedding for stock $j$.
 
 The attention to the sentence embedding is defined as
-
 $$\alpha_i^j=\frac{exp({score}_{i,j})}{\sum_{l}exp({score}_{l,j})}.$$
+
+$$\frac{exp({score}_{i,j})}{\sum_{l}exp({score}_{l,j})}.$$
+
 
 Finally, the market vector for stock $j$ on day $t$ is
 $$m_t^j = \sum_{n_i^V\in N_t^V} \alpha_i^j n_i^V$$
 
-$$\frac{P}{Q}$$
 
 To predict the stock movement, we need the most recent 5 days market vectror collection $M^j_{[t-4, t]}=[m^j_{t-4}, m^j_{t-3}, \dots, m^j_{t}]$. The model used a Bi-GRU layer and a MLP layer to estimate the positive movement probability $\hat y_t^j$, i.e., $h_t^O = \text{GRU}(M^j_{[t-4, t]})$, and $\hat y_t^j = \sigma(\text{MLP}(h^O-t))$.
 
