@@ -24,10 +24,7 @@ The target variable the daily stock price movement. The daily log return > 0.006
 ### Model
 The stock price movement prediction is considered a very difficult problem, if we only include news article strictly before the price date. However, if we include the news for the same price date, this problem is more reasonable as the goal is to learn the embedding vector rather than making a good stock price movement preditive model. Therefore, the news of same price date and 4 days prior (total 5 days of news) are included to 'predict' the stock movement.
 
-Motivated by the attention mechanism, for day $t$, the input data is a pair of 'key' and 'value' news embeddings $(n_i^K, n_i^V)$. The paper denoted the collection of the TFIDF-weighted news embeddings by $N_t^K=\lbrace n_i^K\rbrace_t$ and sentence embeddings by $N_t^V=\lbrace n_i^V\rbrace_t$. The model first calculate the attention score of stock $i$ and news $j$ as $\text{score}_{i,j} = n_i^K \cdot s_j$, where $s_j$ is the stock embedding for stock $j$.
-
-The attention to the sentence embedding is defined as
-$$\alpha_i^j=\frac{exp({score}_{i,j})}{\sum_{l}exp({score}_{l,j})}.$$
+Motivated by the attention mechanism, for day $t$, the input data is a pair of 'key' and 'value' news embeddings $(n_i^K, n_i^V)$. The paper denoted the collection of the TFIDF-weighted news embeddings by $N_t^K=\lbrace n_i^K\rbrace_t$ and sentence embeddings by $N_t^V=\lbrace n_i^V\rbrace_t$. The model first calculate the attention score of stock $i$ and news $j$ as $\text{score}_{i,j} = n_i^K \cdot s_j$, where $s_j$ is the stock embedding for stock $j$. The attention to the sentence embedding is the softmax value of the scores.
 
 Finally, the market vector for stock $j$ on day $t$ is
 $$m_t^j = \sum_{n_i^V\in N_t^V} \alpha_i^j n_i^V$$
