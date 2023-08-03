@@ -8,3 +8,4 @@
 !*.mds
 !*.png
 !requirements*.txt
+!*.sh
