@@ -7,6 +7,7 @@ from sentence_transformers import SentenceTransformer
 
 from src.data.bert_embedding import (embedding_batch_preprocessing,
                                      get_news_path)
+from src.meta_data import get_meta_data
 
 model = SentenceTransformer('all-MiniLM-L6-v2')
 
@@ -34,18 +35,15 @@ def sentence_embedding(
 
 def generate_embedding(
     all_paths: List[str],
-    save_dir_path: str,
     batch_size: int = 1000,
     ) -> None:
     """produce
 
     Args:
-        all_paths (List[str]): _description_
-        tokenizer (_type_): _description_
-        model (_type_): _description_
-        save_dir_path (str): _description_
-        batch_size (int, optional): _description_. Defaults to 40.
+        all_paths (List[str]): news file paths
+        batch_size (int, optional): batch size for sentence transformer. Defaults to 1000.
     """
+    save_dir_path = get_meta_data()['SAVE_DIR']
     results = []
     text_input = embedding_batch_preprocessing(all_paths)
 
@@ -79,15 +77,8 @@ def generate_embedding(
 
 
 if __name__ == '__main__':
-    all_paths = get_news_path(
-        reuters_dir='/home/timnaka123/Documents/financial-news-dataset/ReutersNews106521',
-        bloomberg_dir='/home/timnaka123/Documents/financial-news-dataset/bloomberg'
-        )
+    all_paths = get_news_path()
 
-    generate_embedding(
-        all_paths=all_paths,
-        save_dir_path='/home/timnaka123/Documents/stock_embedding_nlp/src/data/',
-        batch_size=2000
-        )
+    generate_embedding(all_paths=all_paths, batch_size=2000)
 
 

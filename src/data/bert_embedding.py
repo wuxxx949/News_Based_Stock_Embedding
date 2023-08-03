@@ -74,7 +74,7 @@ def embedding_batch_preprocessing(
     """preprocess news text for Bert embedding
 
     Args:
-        pathes (List[str]): pathes in the batch
+        paths (List[str]): paths in the batch
         ncores (Optional[int], optional): number of workers for mp. Defaults to None.
 
     Returns:
