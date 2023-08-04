@@ -4,7 +4,7 @@ import click
 
 from src.portfolio.backtest import BackTest
 
-@click.command()
+@click.command(help='portfolio backtest')
 @click.option('--n', type=int, default=5, help='number of reps')
 @click.option('--epochs', type=int, default=40, help='epochs for DL model')
 @click.option('--min_n', type=int, default=2, help='min number of training years')

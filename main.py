@@ -1,4 +1,4 @@
-from src.portfolio import run_backtest
+from src import cli
 
 if __name__ == '__main__':
-    run_backtest()
+    cli()

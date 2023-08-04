@@ -1,20 +1,23 @@
 import os
 from typing import Dict, List, Optional, Tuple
 
-import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
-import tensorflow as tf
-from tensorflow.keras.callbacks import EarlyStopping
+try: # for sentence transformers
+    import matplotlib.pyplot as plt
+    import numpy as np
+    import pandas as pd
+    import tensorflow as tf
+    from tensorflow.keras.callbacks import EarlyStopping
 
-from src.data.utils import find_next_traindg_date, shift_to_future_one_year
-from src.logger import setup_logger
-from src.meta_data import get_meta_data
-from src.model.model import extract_ticker_embedding, get_model
-from src.model.prepare_training_data import DateManager, ModelDataPrep
-from src.portfolio.portfolio_construction import PortfolioConstruction
+    from src.data.utils import find_next_traindg_date, shift_to_future_one_year
+    from src.logger import setup_logger
+    from src.meta_data import get_meta_data
+    from src.model.model import extract_ticker_embedding, get_model
+    from src.model.prepare_training_data import DateManager, ModelDataPrep
+    from src.portfolio.portfolio_construction import PortfolioConstruction
+    logger = setup_logger(logger_name='bt', log_file='backtest.log')
 
-logger = setup_logger(logger_name='bt', log_file='backtest.log')
+except ModuleNotFoundError:
+    print('no tf installed')
 
 
 class BackTest:
