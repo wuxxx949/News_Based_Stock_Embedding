@@ -8,12 +8,14 @@ import numpy as np
 from scipy.sparse import csr_matrix
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-from src.data.utils import STOPWORDS
 from src.meta_data import get_meta_data
 
-bin_file=os.path.join(get_meta_data()['SAVE_DIR'], 'news.bin')
-# cannot pickle fasttext object in MP so make it global
-model = fasttext.load_model(path=str(bin_file))
+try:
+    bin_file=os.path.join(get_meta_data()['SAVE_DIR'], 'news.bin')
+    # cannot pickle fasttext object in MP so make it global
+    model = fasttext.load_model(path=str(bin_file))
+except ValueError:
+    print(f'No fasttext model object {bin_file}, train embeddings first')
 
 
 def _tfidf_weighted_embedding(
@@ -70,47 +72,3 @@ def tfidf_weighted_embedding(
 
     # reduce(lambda d1, d2: dict(d1, **d2), out)
     return reduce(lambda d1, d2: dict(d1, **d2), out)
-
-
-if __name__ == '__main__':
-    from src.data.bert_embedding import embedding_batch_preprocessing
-    from src.data.explore import get_path
-
-    all_paths = get_path(
-        dir_path='/home/timnaka123/Documents/financial-news-dataset/ReutersNews106521'
-        )[: 1000]
-
-    input_data = embedding_batch_preprocessing(paths=all_paths)
-
-    corpus = [e[2] for e in input_data if e[2] is not None]
-    news_id = [e[1] for e in input_data if e[2] is not None]
-
-    vectorizer = TfidfVectorizer(min_df=0.01, stop_words=STOPWORDS, dtype=np.float32)
-
-    X = vectorizer.fit_transform(corpus)
-
-    test = tfidf_weighted_embedding(
-        x=X,
-        trained_vecterizer=vectorizer,
-        news_id=news_id,
-        batch_size=100,
-        debug=True
-        )
-
-    from scipy.sparse import csr_matrix
-    corpus = [
-        'This is the first document.',
-        'This document is the second document.',
-        'And this is the third one.',
-        'Is this the first document?',
-    ]
-    vectorizer = TfidfVectorizer()
-    X = vectorizer.fit_transform(corpus)
-    vectorizer.get_feature_names_out()
-
-    x = X.toarray()
-    x = np.concatenate([np.array([0] * 9).reshape((1, 9)), x, np.array([0] * 9).reshape((1, 9))])
-    x[3, :] = 0
-    y = csr_matrix(x)
-
-    out = _tfidf_weighted_embedding(x=y, news_id=['a', 'b', 'c', 'd', 'e'], vectorizer=vectorizer)

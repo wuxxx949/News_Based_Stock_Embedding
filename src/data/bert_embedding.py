@@ -8,7 +8,7 @@ import pandas as pd
 from sklearn import decomposition
 
 from src.data.utils import (create_uuid_from_string, get_path,
-                            headline_processing, longest_line, pickle_results)
+                            headline_processing, pickle_results)
 from src.meta_data import get_meta_data
 
 
@@ -197,7 +197,8 @@ def bert_compression(
 
 
 if __name__ == '__main__':
-    from src.data.utils import sample_news, get_raw_news, headline_preprocessing
+    from src.data.utils import (get_raw_news, headline_preprocessing,
+                                sample_news)
     path = sample_news(os.environ['REUTERS_DIR'])
     print(single_file_process(path))
     print(headline_preprocessing(single_file_process(path)))

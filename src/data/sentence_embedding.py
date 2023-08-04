@@ -3,13 +3,16 @@ from typing import List, Tuple
 
 import numpy as np
 import pandas as pd
-from sentence_transformers import SentenceTransformer
+
+try: # for modeling with tf
+    from sentence_transformers import SentenceTransformer
+    model = SentenceTransformer('all-MiniLM-L6-v2')
+except ModuleNotFoundError:
+    print('no sentence_transformers installed, proceed with modeling using tf')
 
 from src.data.bert_embedding import (embedding_batch_preprocessing,
                                      get_news_path)
 from src.meta_data import get_meta_data
-
-model = SentenceTransformer('all-MiniLM-L6-v2')
 
 
 def sentence_embedding(

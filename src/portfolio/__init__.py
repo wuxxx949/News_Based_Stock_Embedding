@@ -26,6 +26,7 @@ def run_backtest(
         max_n (int): max length in years to run
         year_lookback (int):  number of years look back for avg return
     """
+    print("============== Starting: backtest ===============================")
     if year_lookback < 1:
         raise ValueError('year_lookback must be greater than 0')
     if min_n < 1 or min_n > 7:
@@ -41,3 +42,4 @@ def run_backtest(
         max_n=max_n,
         year_lookback=year_lookback
         )
+    print("============== Ending: backtest =================================")

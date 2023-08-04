@@ -7,7 +7,7 @@ from src.data.train_fasttext_embeddings import (news_preprocessing,
 
 
 @click.command(help='faxttext embedding training')
-@click.option('--epochs', type=int, default=10, help='number of epochs')
+@click.option('--epoch', type=int, default=10, help='number of epochs')
 def run_word_embedding(epoch: int) -> None:
     """train W2V embedding using fasttext
 

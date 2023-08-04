@@ -8,5 +8,5 @@ def cli():
     pass
 
 cli.add_command(run_word_embedding)
-cli.add_command(run_backtest)
 cli.add_command(run_sentence_embedding)
+cli.add_command(run_backtest)

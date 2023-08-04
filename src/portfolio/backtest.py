@@ -15,7 +15,6 @@ try: # for sentence transformers
     from src.model.prepare_training_data import DateManager, ModelDataPrep
     from src.portfolio.portfolio_construction import PortfolioConstruction
     logger = setup_logger(logger_name='bt', log_file='backtest.log')
-
 except ModuleNotFoundError:
     print('no tf installed')
 
