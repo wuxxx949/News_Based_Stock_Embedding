@@ -2,7 +2,7 @@
 """
 import click
 
-from src.portfolio.backtest import BackTest
+from src.portfolio.backtest import BackTest, prediction_summary
 
 @click.command(help='portfolio backtest')
 @click.option('--n', type=int, default=5, help='number of reps')
@@ -43,3 +43,20 @@ def run_backtest(
         year_lookback=year_lookback
         )
     print("============== Ending: backtest =================================")
+
+
+@click.option('--min_n', type=int, help='min number of training years')
+@click.option('--max_n', type=int, help='max number of training years')
+@click.option('--n', type=int, help='number of reps')
+def run_prediction_summary(min_n: int, max_n: int, n: int) -> None:
+    """make summary plot for out-of-sample prediction
+
+    Args:
+        min_n (int): min number of years
+        max_n (int): max number of years
+        n (int): number of reps
+    """
+    print("============== Starting: backtest ===============================")
+    prediction_summary(min_n=min_n, max_n=max_n, n=n)
+    print("============== Ending: backtest =================================")
+
