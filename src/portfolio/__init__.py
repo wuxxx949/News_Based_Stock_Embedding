@@ -45,6 +45,7 @@ def run_backtest(
     print("============== Ending: backtest =================================")
 
 
+@click.command(help='make summary')
 @click.option('--min_n', type=int, help='min number of training years')
 @click.option('--max_n', type=int, help='max number of training years')
 @click.option('--n', type=int, help='number of reps')
