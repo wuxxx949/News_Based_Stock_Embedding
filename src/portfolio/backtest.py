@@ -8,7 +8,8 @@ try: # for sentence transformers
     import tensorflow as tf
     from tensorflow.keras.callbacks import EarlyStopping
 
-    from src.data.utils import find_next_traindg_date, shift_to_future_one_year
+    from src.data.utils import (find_next_traindg_date, load_pickled_obj,
+                                pickle_results, shift_to_future_one_year)
     from src.logger import setup_logger
     from src.meta_data import get_meta_data
     from src.model.model import extract_ticker_embedding, get_model
@@ -40,6 +41,11 @@ class BackTest:
         self.dm = DateManager()
         # expected return in portfolio construction
         self.exp_return = np.arange(0.05, 0.30, 0.01)
+
+        # save model performance
+        self.model_tmp_dir = os.path.join(self.meta_data['SAVE_DIR'], 'model_tmp')
+        if not os.path.exists(self.model_tmp_dir):
+            os.makedirs(self.model_tmp_dir)
 
     @staticmethod
     def _process_history(
@@ -171,6 +177,13 @@ class BackTest:
             logger.info(f"validatoin loss on iter {i}: {out[1]}")
             logger.info(f"training accuracy on iter {i}: {out[2]}")
             logger.info(f"validatoin accuracy on iter {i}: {out[3]}")
+
+        # save accuracy in pickle for viz in the end
+        pickle_results(
+            dir=self.model_tmp_dir,
+            name=f'model_accuracy_{length}.pickle',
+            obj=result_max_acc
+            )
 
         return result_max_acc, result_min_iter
 
@@ -308,11 +321,8 @@ class BackTest:
                 )
             self.model_history[i] = train_out
 
-    def _make_summary(self, multiple_run: bool) -> None:
-        """make summary plot for testing results
-
-        Args:
-            multiple_run (bool): if run training pipeline.
+    def _make_summary(self) -> None:
+        """make summary plot for portfolio backtest
         """
         if len(self.portfolio_performance) == 0:
             print('run run_backtest method first')
@@ -337,38 +347,6 @@ class BackTest:
             plt.title(title)
             plt.savefig(os.path.join(self.meta_data['RESULTS_DIR'], f'training_length_{k}.png'))
             plt.clf()
-
-        if not multiple_run:
-            return
-
-        # out-of-sample backtest
-        y_legend = []
-        accuracy = []
-        std = []
-        for k, v in self.model_history.items():
-            start_date, end_date = self.dm.get_date_range(data_len=k)
-            y_legend.append(f'{str(start_date.date())}-{str(end_date.date())}')
-            avg_accuracy = np.mean(v[0])
-            accuracy_std = np.std(v[0])
-            accuracy.append(avg_accuracy)
-            std.append(accuracy_std)
-
-        plt.barh(y_legend, accuracy, color='#3446eb')
-        for index, value in enumerate(accuracy):
-            plt.text(
-                x=value,
-                y=index,
-                s=f'{round(value, 2)} ({round(std[index], 3)})',
-                ha='left',
-                va='center'
-                )
-
-        # Customize the plot
-        plt.xlabel('accuracy')
-        plt.title(f'Model Accuracy and Std ({self.n} rep)')
-        # Turn off the background grid
-        plt.grid(False)
-        plt.savefig(os.path.join(self.meta_data['RESULTS_DIR'], 'pred_accuracy.png'))
 
     def run_backtest(
         self,
@@ -421,11 +399,59 @@ class BackTest:
             self.portfolio_performance[i] = tmp_return_lst
 
         # make summary plot and save to folder
-        self._make_summary(multiple_run=multiple_run)
+        self._make_summary()
+
+
+def prediction_summary(min_n: int, max_n: int, n: int) -> None:
+    """make summary plot for out-of-sample prediction
+
+    Args:
+        min_n (int): min number of years
+        max_n (int): max number of years
+        n (int): number of reps
+    """
+    dm = DateManager()
+    meta_data = get_meta_data()
+    model_tmp_dir = os.path.join(meta_data['SAVE_DIR'], 'model_tmp')
+    model_history = {}
+    for i in range(min_n, max_n + 1):
+        model_history[i] = load_pickled_obj(
+            dir=model_tmp_dir,
+            name=f'model_accuracy_{i}.pickle'
+            )
+
+    # out-of-sample backtest
+    y_legend = []
+    accuracy = []
+    std = []
+    for k, v in model_history.items():
+        start_date, end_date = dm.get_date_range(data_len=k)
+        y_legend.append(f'{str(start_date.date())}-{str(end_date.date())}')
+        avg_accuracy = np.mean(v[0])
+        accuracy_std = np.std(v[0])
+        accuracy.append(avg_accuracy)
+        std.append(accuracy_std)
+
+    plt.barh(y_legend, accuracy, color='#3446eb')
+    for index, value in enumerate(accuracy):
+        plt.text(
+            x=value,
+            y=index,
+            s=f'{round(value, 2)} ({round(std[index], 3)})',
+            ha='left',
+            va='center'
+            )
+
+    # Customize the plot
+    plt.xlabel('accuracy')
+    plt.title(f'Model Accuracy and Std ({n} rep)')
+    # Turn off the background grid
+    plt.grid(False)
+    plt.savefig(os.path.join(meta_data['RESULTS_DIR'], 'pred_accuracy.png'))
 
 
 if __name__=='__main__':
-    bt = BackTest(n=5, epochs=40)
+    bt = BackTest(n=3, epochs=10)
 
     bt.run_backtest(min_n=2, max_n=3, multiple_run=True, epochs=None)
     idx = 15
