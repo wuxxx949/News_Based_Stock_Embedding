@@ -66,3 +66,6 @@ We have superior returns against s&p 500 across all expected returns in 2009, 20
 Note that we use the cosine similarity as $\Sigma$ in the above optimization, a more appropriate approach should estimate stock volatility individually and reconstruct the covariance matrix based on the correlation matrix and stock volatilities.
 
 ## Run Pipeline
+The code is tested under Linux 22.04 with i9-13900kf and Nvidia 4090. It is a computation-intensive project, as it took over 30 hours to finish all the steps.
+
+To configure the Python environment, run `setup.sh` first. Then, you should update the env vars and other parameters according to your hardware in `run.sh` and run it.
