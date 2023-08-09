@@ -68,4 +68,7 @@ Note that we use the cosine similarity as $\Sigma$ in the above optimization, a 
 ## Run Pipeline
 The code is tested under Linux 22.04 with i9-13900kf and Nvidia 4090. It is a computation-intensive project, as it took over 30 hours to finish all the steps.
 
-To configure the Python environment, run `setup.sh` first. Then, you should update the env vars and other parameters according to your hardware in `run.sh` and run it.
+1. The first step is to fetch the Ruters and Bloomberg historical news data according to the data section. 
+2. To configure the Python environment, run `setup.sh`. 
+3. Then, you should update the env vars and other parameters according to your hardware in `run.sh`.
+4. Run `run.sh`.
