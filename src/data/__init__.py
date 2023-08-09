@@ -21,7 +21,7 @@ def run_word_embedding(epoch: int) -> None:
 
 
 @click.command(help='make sentence embedding')
-@click.option('--batch_size', type=int, default=10, help='batch size')
+@click.option('--batch_size', type=int, default=1000, help='batch size')
 def run_sentence_embedding(batch_size: int) -> None:
     """run sentence embedding using sentence_transformers
 
