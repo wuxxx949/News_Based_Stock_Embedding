@@ -48,11 +48,17 @@ Note that this is a predition problem involving time series. Therefore, the rand
 The paper used the embedding for portfolio construction. The idea is to use cosine similarity as an approxy of covariance, so we can plug in the cosine similarity matrix as a covariance matrix (technically a correlation matrix) for portfolio construction.
 
 More specifically, we want to minimize $\text{risk}=w^T\Sigma w$ over portfolio weights vector $w$ subject to $w^Tr=E$, where $r$ is a vector of historical stock return, and $E$ is the expected return set by the user. To make a proper portfolio, we require the stock weights to be between 0 to 1 and sum to 1. I broke the out-of-sample portfolio returns by training periods.
+
  ![length2](image/training_length_2.png)
+
  ![length3](image/training_length_3.png)
+
  ![length4](image/training_length_4.png)
+
  ![length5](image/training_length_5.png)
+
  ![length6](image/training_length_6.png)
+
  ![length7](image/training_length_7.png)
 
 We have superior returns against s&p 500 across all expected returns in 2009, 2010, and 2013. The returns in 2014 are very good for smaller $E$. The return is worse than the benchmark in 2011 and 2012.
