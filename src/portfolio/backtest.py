@@ -427,8 +427,8 @@ def prediction_summary(min_n: int, max_n: int, n: int) -> None:
     for k, v in model_history.items():
         start_date, end_date = dm.get_date_range(data_len=k)
         y_legend.append(f'{str(start_date.date())}-{str(end_date.date())}')
-        avg_accuracy = np.mean(v[0])
-        accuracy_std = np.std(v[0])
+        avg_accuracy = np.mean(v)
+        accuracy_std = np.std(v)
         accuracy.append(avg_accuracy)
         std.append(accuracy_std)
 
@@ -447,10 +447,12 @@ def prediction_summary(min_n: int, max_n: int, n: int) -> None:
     plt.title(f'Model Accuracy and Std ({n} rep)')
     # Turn off the background grid
     plt.grid(False)
-    plt.savefig(os.path.join(meta_data['RESULTS_DIR'], 'pred_accuracy.png'))
+    plt.gcf().set_size_inches(15, 5)
+    plt.savefig(os.path.join(meta_data['RESULTS_DIR'], 'pred_accuracy.png'), dpi=200)
 
 
 if __name__=='__main__':
+    prediction_summary(2, 7, 5)
     bt = BackTest(n=3, epochs=10)
 
     bt.run_backtest(min_n=2, max_n=3, multiple_run=True, epochs=None)

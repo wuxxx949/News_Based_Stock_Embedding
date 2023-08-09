@@ -4,7 +4,10 @@ import multiprocessing as mp
 import os
 from multiprocessing.managers import AutoProxy
 
-import fasttext
+try:
+    import fasttext
+except ModuleNotFoundError:
+    print('no fasttext installed')
 
 from src.data.extract_news import single_file_process
 from src.data.utils import get_news_path, pickle_results
