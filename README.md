@@ -36,7 +36,7 @@ The optional temporal re-weighting method is also implemented.
 ![classifier](image/classifier.png)
 
 ## Backtest
-I follow the backtest method proposed in the paper, i.e., randomly partition the data into training and validation set. However, instead having training, validation, and test set, I used cross-validation during model training.
+I follow the backtest method proposed in the paper, i.e., randomly partition the data into training and validation set. However, instead having training, validation, and test set, I only partitioned the data into training and test set because I didn't need to tune the model.
 
 Following plot summarizes the model out-of-sample prediction accuracy. The y label is the training data period, and the out-of-sample period is 1 year right after the training period. The results are highly comparable to the results in the paper.
 ![accuracy](image/pred_accuracy.png)
