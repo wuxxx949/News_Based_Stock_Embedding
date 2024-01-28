@@ -5,6 +5,8 @@ The goal is to construct embeddings for a set of selected US stocks, which repre
 
 Once a set of vector representations is learnt for selected stocks, we can use the learnt embeddings for any downstream task. Follow the paper, a quartratic programming portfolio optimization is implemented using the stock covariance matrix based on the embeddings.
 
+**If you find this repo useful, please star it to help others find it! It is also the only way I can tell how useful it is to the open source community.**
+
 ## Data
 There are two types of data used in this repo.
 - News data from Reuters and Bloomberg from 2006 to 2013. The data from original [repo](https://github.com/philipperemy/financial-news-dataset) is no longer available, but you can email the author for the dataset for your own research.
@@ -29,7 +31,8 @@ Motivated by the attention mechanism, for day $t$, the input data is a pair of '
 Finally, the market vector for stock $j$ on day $t$ is
 $$m_t^j = \sum_{n_i^V\in N_t^V} \alpha_i^j n_i^V$$
 
-To predict the stock movement, we need the most recent 5 days market vectror collection $M^j_{[t-4, t]}=[m^j_{t-4}, m^j_{t-3}, \dots, m^j_{t}]$. The model used a Bi-GRU layer and a MLP layer to estimate the positive movement probability $\hat y_t^j$, i.e., $h_t^O = \text{GRU}(M^j_{[t-4, t]})$, and $\hat y_t^j = \sigma(\text{MLP}(h^O-t))$.
+To predict the stock movement, we need the most re
+cent 5 days market vectror collection $M^j_{[t-4, t]}=[m^j_{t-4}, m^j_{t-3}, \dots, m^j_{t}]$. The model used a Bi-GRU layer and a MLP layer to estimate the positive movement probability $\hat y_t^j$, i.e., $h_t^O = \text{GRU}(M^j_{[t-4, t]})$, and $\hat y_t^j = \sigma(\text{MLP}(h^O-t))$.
 
 The optional temporal re-weighting method is also implemented.
 
